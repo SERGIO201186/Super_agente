@@ -1440,6 +1440,10 @@
       speakText('Escribe tu duda de cualquier materia y con gusto te ayudo a entenderla.');
     }
 
+    // Pega aquí la URL de tu Apps Script desplegado (termina en /exec).
+    // Instrucciones para obtenerla: google-apps-script/Code.gs
+    const TUTOR_PROXY_URL = "";
+
     async function askTutorDoubt() {
       const input = document.getElementById('doubt-input');
       const question = input.value.trim();
@@ -1452,27 +1456,30 @@
 
       answerBox.classList.add('hidden');
       errorBox.classList.add('hidden');
+
+      if (!TUTOR_PROXY_URL) {
+        errorBox.textContent = "La tutora todavía no está conectada. Falta configurar TUTOR_PROXY_URL en el código con la URL de tu Apps Script (ver google-apps-script/Code.gs).";
+        errorBox.classList.remove('hidden');
+        setAvatarState('sad', 'Aún no estoy conectada.');
+        return;
+      }
+
       askBtn.disabled = true;
       askBtn.innerHTML = '<span>⏳</span> Pensando la mejor explicación...';
       setAvatarState('thinking');
 
       try {
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
+        const response = await fetch(TUTOR_PROXY_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-6",
-            max_tokens: 1000,
-            system: "Eres una tutora escolar paciente, cálida y alentadora para una niña de 10 años que cursa quinto de primaria en México. Ella puede preguntar sobre cualquier materia (matemáticas, ciencias naturales, historia, geografía, etc.), no solo ortografía. Explica el tema de forma muy simple, con un ejemplo concreto y cotidiano, en párrafos cortos, en español de México, con un tono amigable como una agente/detective de una academia secreta. Evita tecnicismos innecesarios. Responde en menos de 180 palabras.",
-            messages: [{ role: "user", content: question }]
-          })
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ question })
         });
 
         if (!response.ok) throw new Error('network');
         const data = await response.json();
-        const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text);
-        const finalText = textBlocks.join('\n').trim();
 
+        if (data.error) throw new Error(data.error);
+        const finalText = (data.answer || '').trim();
         if (!finalText) throw new Error('empty');
 
         answerText.textContent = finalText;
