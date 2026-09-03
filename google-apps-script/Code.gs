@@ -17,7 +17,7 @@
  * dentro de las Propiedades del Script, en tu cuenta de Google.
  */
 
-var GEMINI_MODEL = 'gemini-2.0-flash';
+var GEMINI_MODEL = 'gemini-3.6-flash';
 var MAX_QUESTION_LENGTH = 500;
 
 var TUTOR_SYSTEM_PROMPT =
