@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+  <title>Misión Ortográfica - Detective Samantha</title>
+
+  <!-- App instalable (PWA) -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#4c1d95" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Agencia Ortográfica" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="icon" href="icon-192.png" type="image/png" />
+
+  <!-- Tailwind CSS para diseño moderno, responsivo y adaptable a móvil y tableta -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Nunito:wght@400;700;800;900&display=swap');
+
+    html, body {
+      overflow-x: hidden;
+      width: 100%;
+    }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      padding-left: max(env(safe-area-inset-left), 0.5rem);
+      padding-right: max(env(safe-area-inset-right), 0.5rem);
+      padding-top: max(env(safe-area-inset-top), 0.5rem);
+      padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+    }
+
+    h1, h2, h3, .font-fun {
+      font-family: 'Fredoka', cursive, sans-serif;
+    }
+
+    @keyframes pulse-soft {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+    .animate-soft {
+      animation: pulse-soft 2.2s infinite ease-in-out;
+    }
+
+    /* Tipografía fluida para que las palabras largas nunca se salgan de pantalla */
+    .font-question {
+      font-size: clamp(1.35rem, 6.5vw, 2.35rem);
+      word-break: break-word;
+    }
+
+    @media (max-width: 360px) {
+      .compact-mobile-gap { gap: 0.5rem; }
+    }
+
+    /* Avatar animado de la tutora */
+    .avatar-eye {
+      transform-origin: center;
+      transform-box: fill-box;
+      animation: avatarBlink 4.5s infinite;
+    }
+    @keyframes avatarBlink {
+      0%, 92%, 100% { transform: scaleY(1); }
+      95% { transform: scaleY(0.12); }
+    }
+
+    #avatar-glass {
+      opacity: 0;
+      transform-origin: 96px 28px;
+      transition: opacity 0.2s ease;
+    }
+
+    #tutor-avatar svg { transition: transform 0.2s ease; }
+
+    #tutor-avatar.thinking svg {
+      animation: avatarBob 0.6s infinite ease-in-out;
+    }
+    #tutor-avatar.thinking #avatar-glass {
+      opacity: 1;
+      animation: glassSpin 1.1s linear infinite;
+    }
+    @keyframes avatarBob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+    @keyframes glassSpin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    #tutor-avatar.talking svg {
+      animation: avatarTalkBounce 0.4s infinite ease-in-out;
+    }
+    @keyframes avatarTalkBounce {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.04); }
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-950 min-h-screen text-slate-100 flex flex-col items-center p-2 sm:p-5">
+
+  <!-- Canvas para confeti de victoria -->
+  <canvas id="confetti-canvas" class="fixed inset-0 pointer-events-none z-50"></canvas>
+
+  <!-- CONTENEDOR PRINCIPAL DEL JUEGO -->
+  <main class="w-full max-w-2xl bg-slate-900/90 backdrop-blur-md border border-purple-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col relative min-h-[100dvh] sm:min-h-[640px] sm:max-h-[92vh]">
+
+
+    <!-- BARRA SUPERIOR DE LA DETECTIVE SAMANTHA -->
+    <header class="bg-slate-950/80 px-4 py-3 border-b border-purple-500/20 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-600 flex items-center justify-center text-2xl shadow-lg border-2 border-white/20">
+          🕵️‍♀️
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[10px] font-black uppercase tracking-widest text-amber-400">Super Agente</span>
+            <span class="bg-purple-600/60 text-purple-200 text-[10px] px-2 py-0.5 rounded-full font-bold">5.° Primaria</span>
+          </div>
+          <h2 class="text-base sm:text-lg font-black text-white leading-none mt-0.5">Samantha</h2>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <!-- Estrellas acumuladas -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 flex items-center gap-1 shadow-inner">
+          <span class="text-amber-400 text-sm">⭐</span>
+          <span id="header-stars" class="font-bold text-amber-300 text-xs sm:text-sm">0</span>
+        </div>
+
+        <!-- Botón de Sonido / Voz -->
+        <button id="voice-btn" onclick="toggleVoice()" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 flex items-center justify-center text-base transition-colors" title="Activar/Silenciar voz de apoyo">
+          🗣️
+        </button>
+        <button id="sound-btn" onclick="toggleSound()" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 flex items-center justify-center text-base transition-colors" title="Activar/Silenciar efectos de sonido">
+          🔊
+        </button>
+      </div>
+    </header>
+
+    <!-- ZONA CENTRAL DE PANTALLAS -->
+    <div class="p-4 sm:p-6 flex-1 flex flex-col justify-center">
+
+      <!-- ================= PANTALLA 1: MENÚ PRINCIPAL ================= -->
+      <section id="screen-menu" class="flex flex-col items-center text-center gap-4">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 text-xs font-bold border border-purple-500/40 animate-soft">
+          ✨ ACADEMIA SECRETA DE ORTOGRAFÍA ✨
+        </div>
+
+        <h1 class="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-pink-400 to-purple-300 font-fun leading-tight">
+          Las Reglas Secretas de la R y la H
+        </h1>
+
+        <p class="text-xs sm:text-sm text-slate-300 max-w-md leading-relaxed">
+          ¡Hola, <strong>Samantha</strong>! Antes de cada desafío aprenderás las reglas secretas con ejemplos interactivos. Luego demostrarás tus habilidades resolviendo palabras misteriosas.
+        </p>
+
+        <!-- Selección de Misión -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg mt-1">
+          
+          <button onclick="openLesson('r_rr')" class="group p-4 bg-gradient-to-br from-indigo-700 to-blue-800 hover:from-indigo-600 hover:to-blue-700 rounded-2xl border border-indigo-400/40 shadow-xl text-left transition transform active:scale-95 flex items-center gap-3">
+            <span class="text-3xl p-2.5 bg-indigo-900/60 rounded-xl group-hover:scale-110 transition-transform">🦁</span>
+            <div>
+              <span class="text-[10px] font-black uppercase text-amber-300 tracking-wider">Misión 1</span>
+              <h3 class="font-black text-base text-white">El Rugido de la R y RR</h3>
+              <p class="text-xs text-indigo-200">El sonido suave frente al rugido fuerte</p>
+            </div>
+          </button>
+
+          <button onclick="openLesson('h')" class="group p-4 bg-gradient-to-br from-purple-700 to-pink-800 hover:from-purple-600 hover:to-pink-700 rounded-2xl border border-pink-400/40 shadow-xl text-left transition transform active:scale-95 flex items-center gap-3">
+            <span class="text-3xl p-2.5 bg-purple-900/60 rounded-xl group-hover:scale-110 transition-transform">👻</span>
+            <div>
+              <span class="text-[10px] font-black uppercase text-amber-300 tracking-wider">Misión 2</span>
+              <h3 class="font-black text-base text-white">El Misterio de la H</h3>
+              <p class="text-xs text-pink-200">La letra silenciosa y sus trucos</p>
+            </div>
+          </button>
+
+          <button onclick="openLesson('all')" class="group p-4 bg-gradient-to-br from-amber-600 to-rose-700 hover:from-amber-500 hover:to-rose-600 rounded-2xl border border-amber-400/40 shadow-xl text-left transition transform active:scale-95 flex items-center gap-3 sm:col-span-2">
+            <span class="text-3xl p-2.5 bg-amber-950/60 rounded-xl group-hover:scale-110 transition-transform">🏆</span>
+            <div>
+              <span class="text-[10px] font-black uppercase text-amber-200 tracking-wider">Desafío Supremo</span>
+              <h3 class="font-black text-base text-white">Examen Final: R, RR y H</h3>
+              <p class="text-xs text-amber-100">Repasa todo y demuestra que ya lo aprendiste</p>
+            </div>
+          </button>
+        </div>
+
+        <div class="mt-2 text-xs text-purple-300 flex items-center gap-1.5">
+          <span>💡</span> <span>Dato especial: Tu nombre <strong>Samantha</strong> lleva una hermosa "h" que lo hace único.</span>
+        </div>
+
+        <button onclick="openDoubtScreenFromMenu()" class="mt-1 text-[11px] text-slate-400 hover:text-amber-300 underline underline-offset-2 transition-colors">
+          🙋 ¿Tienes una duda de otra materia? Pregúntale a tu tutora
+        </button>
+      </section>
+
+      <!-- ================= PANTALLA 2: LECCIÓN DIDÁCTICA (ANTES DE JUGAR) ================= -->
+      <section id="screen-lesson" class="hidden flex flex-col gap-4 text-left">
+        <div class="flex items-center justify-between border-b border-purple-500/30 pb-2">
+          <div class="flex items-center gap-2">
+            <span id="lesson-icon" class="text-2xl">📖</span>
+            <div>
+              <span class="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Paso 1: Aprende las Reglas</span>
+              <h2 id="lesson-title" class="text-base sm:text-lg font-black text-white font-fun">Las Reglas de Oro</h2>
+            </div>
+          </div>
+          <button onclick="returnToMenu()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-xl">
+            ✕ Salir
+          </button>
+        </div>
+
+        <!-- Tarjetas didácticas explicativas -->
+        <div id="lesson-cards-container" class="space-y-3 max-h-[42vh] sm:max-h-[380px] overflow-y-auto pr-1">
+          <!-- Se inyectan dinámicamente según la misión -->
+        </div>
+
+        <!-- Botón para pasar al juego (misiones normales) -->
+        <button id="lesson-start-btn" onclick="startChallengeAfterLesson()" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-slate-950 font-black text-sm sm:text-base rounded-2xl shadow-xl transition transform active:scale-95 flex items-center justify-center gap-2">
+          <span>🚀</span> ¡Ya me aprendí las reglas! Empezar Desafío
+        </button>
+
+        <!-- Confirmación especial antes del Examen Final -->
+        <div id="final-confirm-box" class="hidden bg-slate-950/80 border border-amber-400/40 rounded-2xl p-4 text-center gap-2 flex flex-col">
+          <span class="text-2xl">🕵️‍♀️❓</span>
+          <p class="text-sm font-black text-white">Samantha, ¿ya aprendiste bien las reglas de R, RR y H?</p>
+          <p class="text-xs text-slate-300">Este es el <strong>Examen Final</strong>: 10 palabras para demostrar que ya eres toda una experta.</p>
+          <div class="flex flex-col sm:flex-row gap-2 mt-1">
+            <button onclick="beginFinalExam()" class="flex-1 py-3 px-3 bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white font-black text-xs sm:text-sm rounded-xl transition transform active:scale-95 shadow-md">
+              ✅ Sí, ¡estoy lista!
+            </button>
+            <button onclick="declineFinalExam()" class="flex-1 py-3 px-3 bg-slate-800 hover:bg-slate-700 font-black text-xs sm:text-sm rounded-xl transition transform active:scale-95">
+              📖 Aún no, quiero repasar
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PANTALLA 2B: DUDAS DE CUALQUIER MATERIA (TUTORA IA) ================= -->
+      <section id="screen-doubt" class="hidden flex flex-col gap-4 text-left">
+        <div class="flex items-center justify-between border-b border-purple-500/30 pb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">🎓</span>
+            <div>
+              <span class="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Tutora de la Agencia</span>
+              <h2 class="text-base sm:text-lg font-black text-white font-fun">¿Tienes dudas de otro tema?</h2>
+            </div>
+          </div>
+          <button onclick="returnToMenu()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-xl">
+            ✕ Salir
+          </button>
+        </div>
+
+        <!-- Avatar animado de la tutora -->
+        <div class="flex flex-col items-center gap-1.5 py-1">
+          <div id="tutor-avatar" class="relative w-24 h-24 sm:w-28 sm:h-28">
+            <svg viewBox="0 0 120 120" class="w-full h-full drop-shadow-xl">
+              <defs>
+                <linearGradient id="avatarGradient" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#f59e0b"/>
+                  <stop offset="50%" stop-color="#ec4899"/>
+                  <stop offset="100%" stop-color="#7c3aed"/>
+                </linearGradient>
+              </defs>
+              <circle cx="60" cy="60" r="56" fill="url(#avatarGradient)" stroke="white" stroke-opacity="0.3" stroke-width="3"/>
+              <ellipse id="avatar-eye-l" class="avatar-eye" cx="42" cy="55" rx="8" ry="10" fill="white"/>
+              <circle cx="42" cy="57" r="4" fill="#312e81"/>
+              <ellipse id="avatar-eye-r" class="avatar-eye" cx="78" cy="55" rx="8" ry="10" fill="white"/>
+              <circle cx="78" cy="57" r="4" fill="#312e81"/>
+              <path id="avatar-mouth" d="M45 80 Q60 90 75 80" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <g id="avatar-glass">
+                <circle cx="96" cy="28" r="10" fill="none" stroke="#fde68a" stroke-width="3"/>
+                <line x1="103" y1="35" x2="111" y2="43" stroke="#fde68a" stroke-width="3" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <span id="tutor-avatar-status" class="text-[11px] font-bold text-purple-300 text-center">¡Hola! Pregúntame lo que quieras 🙂</span>
+        </div>
+
+        <p class="text-xs sm:text-sm text-slate-300">
+          Escribe cualquier duda de la escuela: matemáticas, ciencias, historia, lo que se te dificulte. Tu tutora te lo explicará fácil y con ejemplos.
+        </p>
+
+        <textarea id="doubt-input" rows="3" maxlength="300" placeholder="Por ejemplo: No entiendo cómo se suman las fracciones..." class="w-full p-3 rounded-2xl bg-slate-950 border-2 border-purple-500/30 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400/60"></textarea>
+
+        <button id="doubt-ask-btn" onclick="askTutorDoubt()" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-sm rounded-2xl shadow-md transition transform active:scale-95 flex items-center justify-center gap-2">
+          <span>💬</span> Preguntar a la Tutora
+        </button>
+
+        <div id="doubt-answer-box" class="hidden bg-slate-950/80 border border-emerald-500/40 rounded-2xl p-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xl">🎓</span>
+            <span class="font-black text-xs text-emerald-300 uppercase tracking-wider">Respuesta de tu tutora</span>
+          </div>
+          <p id="doubt-answer-text" class="text-xs sm:text-sm text-slate-100 leading-relaxed whitespace-pre-wrap"></p>
+        </div>
+
+        <div id="doubt-error-box" class="hidden bg-rose-950/70 border border-rose-500/40 rounded-2xl p-3 text-xs text-rose-200"></div>
+      </section>
+
+
+      <!-- ================= PANTALLA 3: DESAFÍO INTERACTIVO ================= -->
+      <section id="screen-game" class="hidden flex flex-col gap-4">
+        
+        <!-- Barra de progreso superior -->
+        <div class="flex items-center justify-between text-xs font-bold text-slate-300">
+          <span id="game-progress-label">Pregunta 1 de 6</span>
+          <div class="flex items-center gap-2">
+            <span id="streak-badge" class="hidden px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs">
+              🔥 Racha x0
+            </span>
+            <span id="mission-tag" class="px-2 py-0.5 rounded-md bg-purple-900/60 text-purple-300 text-[11px] border border-purple-500/30">
+              Misión Activa
+            </span>
+          </div>
+        </div>
+
+        <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-700">
+          <div id="game-progress-bar" class="bg-gradient-to-r from-amber-400 via-pink-500 to-purple-500 h-full w-0 transition-all duration-300"></div>
+        </div>
+
+        <!-- Tarjeta de la palabra en juego -->
+        <div class="bg-slate-950/70 border border-purple-500/30 rounded-3xl p-5 sm:p-6 text-center flex flex-col items-center gap-2.5 shadow-xl relative">
+          <span id="question-icon" class="text-4xl">🔎</span>
+          
+          <span id="question-prompt" class="text-xs sm:text-sm font-bold text-purple-200">
+            ¿Cómo se escribe correctamente esta palabra?
+          </span>
+
+          <!-- Palabra con el espacio a rellenar -->
+          <div id="question-word" class="font-question font-black text-amber-300 tracking-wider py-3 px-6 bg-slate-900 rounded-2xl border-2 border-amber-400/40 shadow-inner font-fun">
+            pe [ ? ] o
+          </div>
+
+          <!-- Pista contextual didáctica -->
+          <p id="question-hint" class="text-xs sm:text-sm text-slate-300 italic max-w-sm">
+            "Animal fiel que ladra y acompaña al ser humano."
+          </p>
+        </div>
+
+        <!-- Botones de respuesta / Selección -->
+        <div>
+          <div class="text-[11px] font-bold text-slate-400 mb-1.5 text-center uppercase tracking-wider">
+            Samantha, toca la opción correcta:
+          </div>
+          <div id="options-container" class="grid grid-cols-2 gap-3">
+            <!-- Botones inyectados dinámicamente -->
+          </div>
+        </div>
+
+        <!-- Caja de Retroalimentación & Explicación del Error -->
+        <div id="feedback-box" class="hidden p-4 rounded-2xl border transition-all text-left">
+          <div class="flex items-start gap-3">
+            <span id="feedback-avatar" class="text-3xl">💡</span>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <h4 id="feedback-title" class="font-black text-sm">¡Explicación de detective!</h4>
+                <button onclick="speakCurrentFeedback()" class="text-xs bg-black/30 hover:bg-black/50 px-2 py-0.5 rounded-lg text-slate-200 flex items-center gap-1" title="Escuchar explicación">
+                  <span>🔊</span> Escuchar
+                </button>
+              </div>
+              <p id="feedback-samantha-cheer" class="text-xs font-extrabold text-amber-300 mt-1"></p>
+              <p id="feedback-explanation" class="text-xs sm:text-sm leading-relaxed mt-1 text-slate-200"></p>
+            </div>
+          </div>
+
+          <button id="next-question-btn" onclick="nextQuestion()" class="mt-3 w-full py-2.5 bg-white text-slate-950 font-black text-xs sm:text-sm rounded-xl hover:bg-slate-200 transition active:scale-95 shadow-md flex items-center justify-center gap-2">
+            <span>Siguiente Palabra</span> ➔
+          </button>
+        </div>
+
+        <!-- Botón abandonar -->
+        <button onclick="returnToMenu()" class="self-center text-xs text-slate-500 hover:text-slate-300 transition-colors mt-1">
+          ✕ Volver al menú
+        </button>
+      </section>
+
+      <!-- ================= PANTALLA 4: RESULTADOS Y CELEBRACIÓN ================= -->
+      <section id="screen-results" class="hidden flex flex-col items-center text-center gap-4">
+        <div id="results-icon" class="text-6xl p-4 bg-slate-950 rounded-3xl border-2 border-amber-400/50 shadow-2xl animate-soft">
+          🎖️
+        </div>
+
+        <div>
+          <h2 id="results-title" class="text-2xl sm:text-3xl font-black text-amber-300 font-fun">
+            ¡Misión Finalizada!
+          </h2>
+          <p id="results-subtitle" class="text-xs sm:text-sm text-slate-300 mt-1 max-w-sm">
+            ¡Qué gran esfuerzo, Samantha! Has demostrado que la ortografía se aprende practicando.
+          </p>
+        </div>
+
+        <!-- Estadísticas de la partida -->
+        <div class="grid grid-cols-3 gap-2 w-full max-w-sm bg-slate-950/80 p-3 rounded-2xl border border-slate-700">
+          <div class="p-1.5">
+            <span class="text-[11px] text-slate-400 font-bold block">Aciertos</span>
+            <span id="res-score" class="text-xl font-black text-emerald-400">6/6</span>
+          </div>
+          <div class="p-1.5 border-x border-slate-700">
+            <span class="text-[11px] text-slate-400 font-bold block">Estrellas</span>
+            <span id="res-stars" class="text-xl font-black text-amber-400">+60</span>
+          </div>
+          <div class="p-1.5">
+            <span class="text-[11px] text-slate-400 font-bold block">Racha Máx.</span>
+            <span id="res-streak" class="text-xl font-black text-pink-400">4</span>
+          </div>
+        </div>
+
+        <!-- Medalla Especial -->
+        <div class="p-3 bg-gradient-to-r from-amber-500/20 via-pink-500/20 to-purple-500/20 border border-amber-400/40 rounded-2xl w-full max-w-sm flex items-center gap-3 text-left">
+          <span id="badge-icon" class="text-3xl">🏅</span>
+          <div>
+            <span class="text-[9px] font-black uppercase tracking-widest text-amber-300 block">Medalla de la Agente Samantha</span>
+            <h4 id="badge-name" class="font-black text-sm text-white">Domadora de la Ortografía</h4>
+          </div>
+        </div>
+
+        <!-- Invitación a preguntar dudas de otra materia (solo tras aprobar el Examen Final) -->
+        <div id="doubt-prompt-box" class="hidden w-full max-w-sm p-3 bg-indigo-950/70 border border-indigo-400/40 rounded-2xl flex items-center gap-3 text-left">
+          <span class="text-2xl">🎓</span>
+          <div class="flex-1">
+            <p class="text-xs font-bold text-white">¡Ya dominas esto! ¿Tienes dudas de otra materia?</p>
+            <p class="text-[11px] text-indigo-200">Matemáticas, ciencias, historia... pregunta lo que se te dificulte.</p>
+          </div>
+          <button onclick="openDoubtScreenFromMenu()" class="shrink-0 py-2 px-3 bg-indigo-500 hover:bg-indigo-400 text-white font-black text-[11px] rounded-xl transition active:scale-95">
+            Preguntar
+          </button>
+        </div>
+
+        <!-- Botones para volver a jugar o ir a otra lección -->
+        <div class="flex flex-col sm:flex-row gap-2 w-full max-w-sm mt-1">
+          <button onclick="restartWithNewWords()" class="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 font-black text-xs sm:text-sm rounded-xl transition transform active:scale-95 shadow-md flex items-center justify-center gap-1.5">
+            <span>🔄</span> Jugar con NUEVAS palabras
+          </button>
+          <button onclick="returnToMenu()" class="flex-1 py-3 px-4 bg-slate-800 hover:bg-slate-700 font-black text-xs sm:text-sm rounded-xl transition transform active:scale-95">
+            🏠 Menú Principal
+          </button>
+        </div>
+
+        <!-- Compartir progreso por WhatsApp -->
+        <div class="w-full max-w-sm mt-1">
+          <div class="text-[11px] font-bold text-slate-400 mb-1.5 text-center uppercase tracking-wider">
+            📲 Comparte este avance por WhatsApp
+          </div>
+          <button id="whatsapp-send-all-btn" onclick="sendWhatsAppToAll()" class="w-full mb-2 py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl transition transform active:scale-95 shadow-md flex items-center justify-center gap-1.5">
+            <span>📨</span> Enviar a los 3 a la vez
+          </button>
+          <p id="whatsapp-popup-hint" class="hidden text-[10px] text-amber-300 text-center mb-2">
+            Si el navegador bloqueó alguna ventana, permite las "ventanas emergentes" para este sitio y vuelve a intentar.
+          </p>
+          <div id="whatsapp-share-container" class="flex flex-col sm:flex-row gap-2">
+            <!-- Botones inyectados dinámicamente -->
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- PIE DE PÁGINA -->
+    <footer class="bg-slate-950/80 px-4 py-2 border-t border-purple-500/20 text-center text-[11px] text-slate-400 flex items-center justify-between">
+      <span>Creado para la detective <strong>Samantha</strong> ⭐ 5.° Grado</span>
+      <span class="text-amber-400 font-bold">¡Tú puedes lograrlo todo!</span>
+    </footer>
+
+  </main>
+
+  <!-- ================= LÓGICA JAVASCRIPT ================= -->
+  <script>
+    /* =============================================================
+       1. LECCIONES DIDÁCTICAS (REGLAS Y EJEMPLOS ANTES DE JUGAR)
+       ============================================================= */
+    const lessonsData = {
+      r_rr: {
+        title: "Reglas de la R y la Doble RR",
+        icon: "🦁",
+        cards: [
+          {
+            tag: "REGLA DE ORO #1",
+            heading: "Al inicio de una palabra: ¡NUNCA jamás RR!",
+            content: "Aunque una palabra comience con un sonido fuertísimo como un león (rugido), <strong>NUNCA se escribe con doble RR al empezar</strong>. Siempre es una sola <strong>R</strong>.",
+            examples: "<strong>R</strong>atón, <strong>R</strong>osa, <strong>R</strong>eloj, <strong>R</strong>ápido, <strong>R</strong>ueda.",
+            tip: "¡No dejes que el sonido fuerte te engañe! Al inicio, una sola R hace todo el trabajo."
+          },
+          {
+            tag: "REGLA DE ORO #2",
+            heading: "Sonido Suave frente al Sonido Fuerte entre Vocales",
+            content: "Cuando la letra está en medio de dos vocales (a, e, i, o, u):<br>• Si suena <strong>suave y dulce</strong> = <strong>una sola R</strong>.<br>• Si suena <strong>fuerte y vibrante</strong> = <strong>doble RR</strong>.",
+            examples: "<em>pe<strong>r</strong>a</em> (fruta dulce, suave) en comparación con <em>pe<strong>rr</strong>o</em> (animal que ladra, fuerte).<br><em>ca<strong>r</strong>o</em> (costoso) frente a <em>ca<strong>rr</strong>o</em> (automóvil).",
+            tip: "¡Cuidado! Si pones solo una 'r' en 'carro', se convierte en 'caro'."
+          },
+          {
+            tag: "REGLA DE ORO #3",
+            heading: "Las Letras Guardianas: N, L y S",
+            content: "Si el sonido fuerte viene justo después de las letras <strong>N</strong>, <strong>L</strong> o <strong>S</strong>, ¡solo se escribe <strong>una sola R</strong>!",
+            examples: "al<strong>r</strong>ededor (después de L), en<strong>r</strong>edado (después de N), son<strong>r</strong>isa (después de N), is<strong>r</strong>aelí (después de S).",
+            tip: "Las letras N, L y S son guardianas que no dejan pasar a la segunda R."
+          }
+        ]
+      },
+
+      h: {
+        title: "Reglas de la H Silenciosa (La Letra Fantasma)",
+        icon: "👻",
+        cards: [
+          {
+            tag: "REGLA DE ORO #1",
+            heading: "Las Palabras que inician con HIE- y HUE-",
+            content: "Casi todas las palabras que empiezan con los diptongos <strong>hie-</strong> o <strong>hue-</strong> llevan la <strong>H</strong> al principio obligatoriamente.",
+            examples: "<strong>hie</strong>lo, <strong>hie</strong>rba, <strong>hie</strong>na, <strong>hue</strong>vo, <strong>hue</strong>so, <strong>hue</strong>lla, <strong>hue</strong>rto.",
+            tip: "Si ves que la palabra arranca con 'ie' o 'ue', ¡ponle la H de escudo!"
+          },
+          {
+            tag: "REGLA DE ORO #2",
+            heading: "Palabras de Agua (HIDRO) y Tierra/Vapor (HUM)",
+            content: "Las palabras que empiezan con <strong>hidro-</strong> (que significa agua) o <strong>hum-</strong> (tierra o humo) se escriben con <strong>H</strong>.",
+            examples: "<strong>hidro</strong>avión, <strong>hidra</strong>tante, <strong>hum</strong>o, <strong>húm</strong>edo, <strong>hum</strong>ano.",
+            tip: "A la H le encantan las ciencias de la naturaleza y el agua."
+          },
+          {
+            tag: "REGLA DE ORO #3",
+            heading: "El Secreto de la Familia de Palabras",
+            content: "Si la palabra original lleva H, todos sus hijitos y formas del verbo también llevan H.",
+            examples: "Del verbo <strong>H</strong>acer: <em><strong>h</strong>ice, <strong>h</strong>ago, <strong>h</strong>aremos, <strong>h</strong>echo</em>.<br>Del verbo <strong>H</strong>ablar: <em><strong>h</strong>ablé, <strong>h</strong>ablaron</em>.",
+            tip: "¡La H se hereda en toda la familia de palabras!"
+          },
+          {
+            tag: "DATO CURIOSO PARA TI",
+            heading: "¡Tu propio nombre: Samantha!",
+            content: "Tu hermoso nombre <strong>Samantha</strong> lleva una 'h' especial y elegante en el medio (th), como muchos nombres de origen internacional.",
+            examples: "Sa-man-t-<strong>h</strong>-a.",
+            tip: "¡Eres la dueña oficial de la letra H en la familia!"
+          }
+        ]
+      },
+
+      all: {
+        title: "Gran Repaso General: R, RR y H",
+        icon: "🏆",
+        cards: [
+          {
+            tag: "RESUMEN EXPRÉS",
+            heading: "Los 3 Mandamientos de la R y RR",
+            content: "1. Nunca empieces con RR (<em>Ratón, Reloj</em>).<br>2. Dos RR solo entre vocales si ruge fuerte (<em>Perro, Carro</em>).<br>3. Una sola R si es suave (<em>Pera, Cara</em>) o después de N, L, S (<em>Sonrisa, Alrededor</em>).",
+            examples: "Fácil de recordar y aplicar.",
+            tip: "Revisa siempre las letras vecinas."
+          },
+          {
+            tag: "RESUMEN EXPRÉS",
+            heading: "Los 3 Mandamientos de la H",
+            content: "1. Siempre con <strong>HIE-</strong> y <strong>HUE-</strong> (<em>Hielo, Huevo</em>).<br>2. Con <strong>HIDRO-</strong> y <strong>HUM-</strong> (<em>Hidratar, Humo</em>).<br>3. ¡Cuidado con las trampas! Palabras como <em>oso, ojo, ala, ola del mar</em> no llevan H.",
+            examples: "La H es muda, pero tus ojos de detective la descubren.",
+            tip: "¡Samantha, estás lista para el Desafío Supremo!"
+          }
+        ]
+      }
+    };
+
+    /* =============================================================
+       2. BANCO AMPLIO DE PALABRAS (SELECCIÓN ALEATORIA EN CADA PARTIDA)
+       ============================================================= */
+    const questionBank = {
+      r_rr: [
+        {
+          word: "pe [ ___ ] o",
+          options: ["r", "rr"],
+          correct: "rr",
+          hint: "Animal fiel que ladra con sonido fuerte.",
+          whyWrong: "Pusiste una sola 'r'. Si escribes 'pera' con una sola 'r', te refieres a la fruta deliciosa. Para el animal que ladra con fuerza entre dos vocales, se necesita doble 'rr'.",
+          rule: "Doble RR entre vocales para sonido fuerte."
+        },
+        {
+          word: "pe [ ___ ] a",
+          options: ["r", "rr"],
+          correct: "r",
+          hint: "Fruta verde y jugosa, sonido suave.",
+          whyWrong: "Pusiste doble 'rr', lo que la haría sonar fuerte como 'perra'. La fruta tiene sonido dulce y suave, así que lleva solo una 'r'.",
+          rule: "Una sola R entre vocales para sonido suave."
+        },
+        {
+          word: "[ ___ ] atón",
+          options: ["R", "RR"],
+          correct: "R",
+          hint: "Roedor veloz. Regla sagrada al iniciar la palabra.",
+          whyWrong: "Pusiste 'RR' al inicio. ¡Cuidado, Samantha! Ninguna palabra en nuestro idioma puede empezar jamás con dos 'RR', aunque suene muy fuerte como un motor.",
+          rule: "¡Nunca se escribe RR al comienzo de una palabra!"
+        },
+        {
+          word: "[ ___ ] eloj",
+          options: ["R", "RR"],
+          correct: "R",
+          hint: "Aparato que marca las horas. Está al inicio.",
+          whyWrong: "Pusiste 'RR' al principio. Recuerda la regla de oro: al comienzo de cualquier palabra solo se usa una sola 'R'.",
+          rule: "Al inicio siempre es una sola R."
+        },
+        {
+          word: "ca [ ___ ] o",
+          options: ["r", "rr"],
+          correct: "rr",
+          hint: "Automóvil de carreras con sonido de motor fuerte.",
+          whyWrong: "Pusiste una sola 'r' ('caro', que significa de mucho dinero). El vehículo lleva doble 'rr' para que suene potente entre la 'a' y la 'o'.",
+          rule: "Doble RR entre dos vocales para sonido fuerte."
+        },
+        {
+          word: "ma [ ___ ] iposa",
+          options: ["r", "rr"],
+          correct: "r",
+          hint: "Insecto de alas de colores, pronunciación suave.",
+          whyWrong: "Pusiste 'rr'. Si pones dos 'rr', sonaría fuerte y tosco. La mariposa tiene un sonido suave que apenas roza el paladar, así que lleva una 'r'.",
+          rule: "Una sola R para sonido suave entre vocales."
+        },
+        {
+          word: "al [ ___ ] ededor",
+          options: ["r", "rr"],
+          correct: "r",
+          hint: "Fíjate bien: la letra que está antes es la 'L'.",
+          whyWrong: "Pusiste 'rr'. Recuerda que después de las letras guardianas N, L o S, ¡solo se escribe una sola 'r', aunque suene fuerte!",
+          rule: "Después de L, N o S solo se escribe una R."
+        },
+        {
+          word: "en [ ___ ] edado",
+          options: ["r", "rr"],
+          correct: "r",
+          hint: "Está justo después de la letra guardiana 'N'.",
+          whyWrong: "Pusiste 'rr'. La regla dice que después de la letra 'N' nunca se pone doble 'rr'. Se escribe con una sola 'r': enredado.",
+          rule: "Después de N solo va una sola R."
+        },
+        {
+          word: "son [ ___ ] isa",
+          options: ["r", "rr"],
+          correct: "r",
+          hint: "El gesto alegre de tu cara, va después de la 'N'.",
+          whyWrong: "Pusiste 'rr'. Aunque 'sonrisa' suena fuerte, como va inmediatamente después de la 'N', solo se coloca una 'r'.",
+          rule: "Después de N se escribe una sola R."
+        },
+        {
+          word: "to [ ___ ] e",
+          options: ["r", "rr"],
+          correct: "rr",
+          hint: "Construcción muy alta de un castillo.",
+          whyWrong: "Pusiste una sola 'r'. Para que la palabra suene fuerte entre la 'o' y la 'e', debe llevar doble 'rr' (torre).",
+          rule: "Doble RR entre vocales con sonido fuerte."
+        },
+        {
+          word: "guita [ ___ ] a",
+          options: ["r", "rr"],
+          correct: "rr",
+          hint: "Instrumento musical con cuerdas.",
+          whyWrong: "Pusiste una sola 'r'. La palabra 'guitarra' necesita dos 'rr' porque suena fuerte y está atrapada entre las dos 'a'.",
+          rule: "Doble RR entre dos vocales."
+        },
+        {
+          word: "ca [ ___ ] acol",
+          options: ["r", "rr"],
+          correct: "r",
+          hint: "Animalito lento con concha en la espalda. Sonido suave.",
+          whyWrong: "Pusiste 'rr'. El caracol se pronuncia con sonido suave en medio de la palabra, por eso lleva solo una 'r'.",
+          rule: "Una sola R suave entre vocales."
+        },
+        {
+          word: "is [ ___ ] aelí",
+          options: ["r", "rr"],
+          correct: "r",
+          hint: "Fíjate bien: la letra que está antes es la 'S'.",
+          whyWrong: "Pusiste 'rr'. Después de la letra guardiana 'S', solo se escribe una sola 'r'.",
+          rule: "Después de S solo va una sola R."
+        },
+        {
+          word: "co [ ___ ] eo",
+          options: ["r", "rr"],
+          correct: "rr",
+          hint: "Cuando se manda una carta o paquete por el servicio postal.",
+          whyWrong: "Pusiste una sola 'r'. Entre las dos vocales 'o' y 'e', el sonido fuerte necesita doble 'rr'.",
+          rule: "Doble RR entre vocales para sonido fuerte."
+        },
+        {
+          word: "ba [ ___ ] o",
+          options: ["r", "rr"],
+          correct: "r",
+          hint: "Lugar donde te bañas, con sonido suave.",
+          whyWrong: "Pusiste 'rr'. Si pones doble 'rr' se convierte en 'barro' (lodo). El sonido suave lleva una sola 'r'.",
+          rule: "Una sola R para sonido suave entre vocales."
+        },
+        {
+          word: "[ ___ ] opa",
+          options: ["R", "RR"],
+          correct: "R",
+          hint: "Las prendas que usamos para vestirnos. Está al inicio.",
+          whyWrong: "Pusiste 'RR' al inicio. Recuerda: al comienzo de cualquier palabra solo se usa una sola 'R'.",
+          rule: "Al inicio siempre es una sola R."
+        },
+        {
+          word: "co [ ___ ] iente",
+          options: ["r", "rr"],
+          correct: "r",
+          hint: "El flujo de agua de un río, o la electricidad. Sonido suave.",
+          whyWrong: "Pusiste 'rr'. El sonido entre 'o' e 'i' aquí es suave, así que lleva una sola 'r'.",
+          rule: "Una sola R suave entre vocales."
+        }
+      ],
+
+      h: [
+        {
+          word: "[ ___ ] ielo",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "Agua congelada. Empieza por el diptongo 'ie'.",
+          whyWrong: "Elegiste 'Sin H'. Recuerda la regla mágica: todas las palabras que empiezan con el sonido 'hie-' llevan H obligatoria.",
+          rule: "Palabras que empiezan con HIE- llevan H."
+        },
+        {
+          word: "[ ___ ] uevo",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "Lo pone la gallina. Empieza por 'ue'.",
+          whyWrong: "Elegiste 'Sin H'. La regla secreta dice que las palabras que inician con 'hue-' siempre se escriben con H (huevo, hueso, huella).",
+          rule: "Palabras que empiezan con HUE- llevan H."
+        },
+        {
+          word: "[ ___ ] ueso",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "Forma nuestro esqueleto. Empieza con 'ue'.",
+          whyWrong: "Elegiste 'Sin H'. Como empieza por 'hue-', necesita la H fantasma protegiendo al inicio: hueso.",
+          rule: "Inicios con HUE- siempre llevan H."
+        },
+        {
+          word: "[ ___ ] umo",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "El vapor gris de las chimeneas. Empieza con 'hum-'.",
+          whyWrong: "Elegiste 'Sin H'. Las palabras que comienzan con la sílaba 'hum-' (como humo, húmedo y humano) siempre llevan H.",
+          rule: "Palabras que inician con HUM- llevan H."
+        },
+        {
+          word: "[ ___ ] oso",
+          options: ["H", "Sin H"],
+          correct: "Sin H",
+          hint: "Animal grande que hiberna. ¡Cuidado con la trampa!",
+          whyWrong: "Elegiste ponerle 'H'. ¡Caíste en la trampa del monstruo! La palabra 'oso' comienza directamente con la vocal 'O' y jamás lleva H.",
+          rule: "Oso se escribe sin H."
+        },
+        {
+          word: "[ ___ ] ice",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "Del verbo 'hacer': Yo ya lo...",
+          whyWrong: "Elegiste 'Sin H'. Como la palabra original es 'Hacer' con H, todos sus familiares como 'hice', 'hago' y 'hecho' llevan H.",
+          rule: "Familia del verbo Hacer siempre con H."
+        },
+        {
+          word: "¡ [ ___ ] ola!",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "El saludo cariñoso que le das a tus amigos.",
+          whyWrong: "Elegiste 'Sin H'. El saludo cordial se escribe con 'H' ('¡Hola!'). La 'ola' sin H es únicamente la onda de agua en el mar.",
+          rule: "El saludo ¡Hola! lleva H."
+        },
+        {
+          word: "[ ___ ] idroavión",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "Avión que aterriza en el agua. Prefijo 'hidro-'.",
+          whyWrong: "Elegiste 'Sin H'. Todas las palabras que empiezan por 'hidro-' (que significa agua) se escriben con H.",
+          rule: "Palabras con HIDRO- (agua) llevan H."
+        },
+        {
+          word: "[ ___ ] iena",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "Animal salvaje que parece reírse. Empieza con 'hie-'.",
+          whyWrong: "Elegiste 'Sin H'. Empieza con el diptongo 'hie-', por lo que obligatoriamente lleva H al inicio: hiena.",
+          rule: "Palabras que empiezan con HIE- llevan H."
+        },
+        {
+          word: "[ ___ ] isla",
+          options: ["H", "Sin H"],
+          correct: "Sin H",
+          hint: "Porción de tierra rodeada de agua por todas partes. ¡Trampa!",
+          whyWrong: "Elegiste ponerle 'H'. ¡Trampa descubierta! La palabra 'isla' empieza con la vocal 'I' limpia y nunca lleva H.",
+          rule: "Isla no lleva H."
+        },
+        {
+          word: "[ ___ ] uella",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "La marca que dejamos al pisar en la arena.",
+          whyWrong: "Elegiste 'Sin H'. Como comienza con el diptongo 'hue-', la H debe estar al principio: huella.",
+          rule: "Palabras con HUE- llevan H."
+        },
+        {
+          word: "[ ___ ] alar",
+          options: ["H", "Sin H"],
+          correct: "Sin H",
+          hint: "Lo que hacen los pájaros y los aviones con sus alas. ¡Trampa!",
+          whyWrong: "Elegiste ponerle 'H'. ¡Trampa descubierta! 'Alar' viene de 'ala' y no lleva H.",
+          rule: "Alar se escribe sin H."
+        },
+        {
+          word: "[ ___ ] echo",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "Del verbo 'hacer': lo que ya está terminado.",
+          whyWrong: "Elegiste 'Sin H'. Como pertenece a la familia del verbo 'hacer', se escribe con H: hecho.",
+          rule: "Familia del verbo Hacer siempre con H."
+        },
+        {
+          word: "[ ___ ] armónica",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "Instrumento musical pequeño que se toca con la boca.",
+          whyWrong: "Elegiste 'Sin H'. La palabra 'harmónica' (y 'armonía' relacionada) se escribe con H al inicio.",
+          rule: "Harmónica lleva H."
+        },
+        {
+          word: "[ ___ ] uracán",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "Tormenta gigante con vientos muy fuertes que gira.",
+          whyWrong: "Elegiste 'Sin H'. La palabra 'huracán' siempre lleva H al inicio.",
+          rule: "Huracán lleva H."
+        },
+        {
+          word: "[ ___ ] úmedo",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "Cuando algo tiene un poco de agua, ni mojado ni seco del todo.",
+          whyWrong: "Elegiste 'Sin H'. Como empieza con 'hum-', la palabra 'húmedo' lleva H obligatoria.",
+          rule: "Palabras que inician con HUM- llevan H."
+        },
+        {
+          word: "[ ___ ] ormiga",
+          options: ["H", "Sin H"],
+          correct: "H",
+          hint: "Insecto pequeño y trabajador que vive en colonias.",
+          whyWrong: "Elegiste 'Sin H'. La palabra 'hormiga' siempre se escribe con H al inicio.",
+          rule: "Hormiga lleva H."
+        }
+      ]
+    };
+
+    /* Frases de aliento personalizadas para Samantha cuando comete un error */
+    const samanthaEncouragements = [
+      "¡Ánimo Samantha, tú puedes! De los errores se aprende más que de los aciertos.",
+      "¡No te preocupes, Samantha! Hasta las mejores detectives practican para mejorar.",
+      "¡Tú eres muy lista, Samantha! Solo analiza la pista con calma y lo dominarás.",
+      "¡Sigue adelante Samantha, vas por excelente camino! La próxima es tuya.",
+      "¡No pasa nada, Samantha! Cada error es un escalón hacia la maestría."
+    ];
+
+    /* =============================================================
+       3. SÍNTESIS DE VOZ Y EFECTOS DE SONIDO SINTETIZADOS
+       ============================================================= */
+    let soundEnabled = true;
+    let voiceEnabled = true;
+    let audioCtx = null;
+    let currentFeedbackText = "";
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    function playAudioTone(type) {
+      if (!soundEnabled) return;
+      try {
+        initAudio();
+        const now = audioCtx.currentTime;
+
+        if (type === 'correct') {
+          // Melodía alegre en acorde mayor
+          const osc1 = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc1.type = 'triangle';
+          
+          osc1.frequency.setValueAtTime(523.25, now); // C5
+          osc1.frequency.setValueAtTime(659.25, now + 0.1); // E5
+          osc1.frequency.setValueAtTime(783.99, now + 0.2); // G5
+          osc1.frequency.setValueAtTime(1046.50, now + 0.3); // C6
+
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+          osc1.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc1.start(now);
+          osc1.stop(now + 0.55);
+        } else if (type === 'wrong') {
+          // Sonido amistoso y suave de atención
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(320, now);
+          osc.frequency.exponentialRampToValueAtTime(220, now + 0.35);
+
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.start(now);
+          osc.stop(now + 0.4);
+        } else if (type === 'fanfare') {
+          // Fanfarria completa
+          const notes = [523.25, 659.25, 783.99, 1046.50];
+          notes.forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.2, now + i * 0.12);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.4);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now + i * 0.12);
+            osc.stop(now + i * 0.12 + 0.45);
+          });
+        }
+      } catch (e) {}
+    }
+
+    /* Hablar en voz alta usando la Web Speech API */
+    function speakText(text) {
+      if (!voiceEnabled || !('speechSynthesis' in window)) return;
+      try {
+        window.speechSynthesis.cancel(); // Detener cualquier audio previo
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'es-MX'; // Preferir español latinoamericano
+        utterance.rate = 0.95; // Un poco más pausado para que sea muy claro
+        utterance.pitch = 1.1; // Tono cálido y alegre
+
+        // Intentar buscar una voz en español
+        const voices = window.speechSynthesis.getVoices();
+        const spanishVoice = voices.find(v => v.lang.startsWith('es'));
+        if (spanishVoice) utterance.voice = spanishVoice;
+
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {}
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('sound-btn').textContent = soundEnabled ? '🔊' : '🔇';
+    }
+
+    function toggleVoice() {
+      voiceEnabled = !voiceEnabled;
+      document.getElementById('voice-btn').textContent = voiceEnabled ? '🗣️' : '🤐';
+      if (!voiceEnabled && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    }
+
+    function speakCurrentFeedback() {
+      if (currentFeedbackText) {
+        speakText(currentFeedbackText);
+      }
+    }
+
+    /* =============================================================
+       4. CONTROL DE PANTALLAS Y ESTADO
+       ============================================================= */
+    let currentMissionKey = 'r_rr';
+    let currentQuestions = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let currentStreak = 0;
+    let maxStreak = 0;
+    let totalStars = 0;
+    let missionsCompletedEver = 0;
+    let bestStreakEver = 0;
+    let isAnswering = false;
+
+    /* =============================================================
+       4B. PROGRESO PERSISTENTE (se guarda entre sesiones)
+       ============================================================= */
+    const PROGRESS_KEY = 'samantha-ortografia-progreso';
+
+    async function loadProgress() {
+      try {
+        if (window.storage) {
+          const result = await window.storage.get(PROGRESS_KEY, false);
+          if (result && result.value) {
+            const data = JSON.parse(result.value);
+            totalStars = data.totalStars || 0;
+            missionsCompletedEver = data.missionsCompletedEver || 0;
+            bestStreakEver = data.bestStreakEver || 0;
+          }
+        }
+      } catch (e) {
+        // Sin progreso guardado todavía o storage no disponible; se empieza en 0.
+      }
+      document.getElementById('header-stars').textContent = totalStars;
+    }
+
+    async function saveProgress() {
+      try {
+        if (window.storage) {
+          await window.storage.set(PROGRESS_KEY, JSON.stringify({
+            totalStars,
+            missionsCompletedEver,
+            bestStreakEver,
+            lastPlayed: new Date().toISOString()
+          }), false);
+        }
+      } catch (e) {
+        // Si falla el guardado, el juego sigue funcionando normalmente en esta sesión.
+      }
+    }
+
+    loadProgress();
+
+    function showScreen(screenId) {
+      ['screen-menu', 'screen-lesson', 'screen-game', 'screen-results', 'screen-doubt'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+      });
+      document.getElementById(screenId).classList.remove('hidden');
+    }
+
+    function returnToMenu() {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      showScreen('screen-menu');
+    }
+
+    /* =============================================================
+       5. PASO 1: ABRIR LECCIÓN DIDÁCTICA
+       ============================================================= */
+    function openLesson(missionKey) {
+      currentMissionKey = missionKey;
+      const lesson = lessonsData[missionKey];
+
+      document.getElementById('lesson-title').textContent = lesson.title;
+      document.getElementById('lesson-icon').textContent = lesson.icon;
+
+      const container = document.getElementById('lesson-cards-container');
+      container.innerHTML = '';
+
+      lesson.cards.forEach((card, index) => {
+        const cardEl = document.createElement('div');
+        cardEl.className = "bg-slate-900/90 border border-purple-500/30 p-4 rounded-2xl shadow-lg";
+        cardEl.innerHTML = `
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[10px] font-black uppercase text-amber-400 tracking-wider bg-amber-400/10 px-2 py-0.5 rounded-md border border-amber-400/20">${card.tag}</span>
+            <button onclick="speakLessonCard(${index})" class="text-[11px] text-slate-300 hover:text-white bg-slate-800 px-2 py-0.5 rounded-lg flex items-center gap-1">
+              <span>🔊</span> Escuchar
+            </button>
+          </div>
+          <h3 class="text-sm font-black text-white mt-1">${card.heading}</h3>
+          <p class="text-xs text-slate-300 mt-1 leading-relaxed">${card.content}</p>
+          <div class="mt-2.5 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 text-xs">
+            <span class="font-bold text-emerald-400 block mb-0.5">Ejemplos para recordar:</span>
+            <span class="text-slate-200">${card.examples}</span>
+          </div>
+          <div class="mt-2 text-[11px] text-purple-300 italic flex items-center gap-1.5">
+            <span>💡</span> <span>${card.tip}</span>
+          </div>
+        `;
+        container.appendChild(cardEl);
+      });
+
+      // Para el Examen Final se pregunta primero si ya está lista; las demás misiones van directo al botón normal.
+      const isFinal = (missionKey === 'all');
+      document.getElementById('lesson-start-btn').classList.toggle('hidden', isFinal);
+      document.getElementById('final-confirm-box').classList.toggle('hidden', !isFinal);
+
+      showScreen('screen-lesson');
+      speakText(isFinal
+        ? `Samantha, repasa bien estas reglas antes de contestar si ya estás lista para el examen final.`
+        : `¡Bienvenida Samantha! Vamos a revisar las reglas secretas de esta misión.`);
+    }
+
+    function speakLessonCard(cardIndex) {
+      const card = lessonsData[currentMissionKey].cards[cardIndex];
+      const plainContent = card.content.replace(/<[^>]*>?/gm, '');
+      const plainExamples = card.examples.replace(/<[^>]*>?/gm, '');
+      speakText(`${card.heading}. ${plainContent}. Por ejemplo: ${plainExamples}. ${card.tip}`);
+    }
+
+    function declineFinalExam() {
+      speakText(`Muy bien, repasa las reglas con calma. Cuando estés lista, dime que sí.`);
+      document.getElementById('lesson-cards-container').scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function beginFinalExam() {
+      startChallengeAfterLesson();
+    }
+
+    /* =============================================================
+       6. PASO 2: INICIAR EL DESAFÍO CON PALABRAS ALEATORIAS
+       ============================================================= */
+    async function startChallengeAfterLesson() {
+      await prepareNewQuestions();
+      currentQuestionIndex = 0;
+      score = 0;
+      currentStreak = 0;
+      maxStreak = 0;
+      showScreen('screen-game');
+      renderQuestion();
+      speakText(currentMissionKey === 'all'
+        ? `¡Comienza el examen final, Samantha! Lee cada palabra con mucha atención.`
+        : `¡Desafío iniciado, Samantha! Concéntrate y lee la palabra con atención.`);
+    }
+
+    function restartWithNewWords() {
+      startChallengeAfterLesson();
+    }
+
+    /* =============================================================
+       6B. ANTI-REPETICIÓN: recuerda qué palabras ya se usaron
+       ============================================================= */
+    const SEEN_WORDS_KEY = 'samantha-ortografia-vistas';
+
+    async function loadSeenWords() {
+      try {
+        if (window.storage) {
+          const result = await window.storage.get(SEEN_WORDS_KEY, false);
+          if (result && result.value) return JSON.parse(result.value);
+        }
+      } catch (e) { /* sin historial todavía */ }
+      return {};
+    }
+
+    async function saveSeenWords(seenMap) {
+      try {
+        if (window.storage) {
+          await window.storage.set(SEEN_WORDS_KEY, JSON.stringify(seenMap), false);
+        }
+      } catch (e) { /* si falla, el juego sigue funcionando en esta sesión */ }
+    }
+
+    /* Selecciona un lote fresco de preguntas, priorizando las palabras menos vistas recientemente */
+    async function prepareNewQuestions() {
+      let pool = [];
+      let questionCount = 6;
+
+      if (currentMissionKey === 'r_rr') {
+        pool = [...questionBank.r_rr];
+        document.getElementById('mission-tag').textContent = "Misión: R y RR";
+      } else if (currentMissionKey === 'h') {
+        pool = [...questionBank.h];
+        document.getElementById('mission-tag').textContent = "Misión: Letra H";
+      } else {
+        pool = [...questionBank.r_rr, ...questionBank.h];
+        document.getElementById('mission-tag').textContent = "Examen Final";
+        questionCount = Math.min(10, pool.length);
+      }
+
+      const seenMap = await loadSeenWords();
+
+      // Barajar el banco completo con algoritmo Fisher-Yates
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+
+      // Ordenar priorizando las palabras usadas hace más tiempo (o nunca usadas)
+      pool.sort((a, b) => (seenMap[a.word] || 0) - (seenMap[b.word] || 0));
+
+      currentQuestions = pool.slice(0, questionCount);
+
+      // Registrar estas palabras como vistas ahora, para no repetirlas pronto
+      const timestamp = Date.now();
+      currentQuestions.forEach(q => { seenMap[q.word] = timestamp; });
+      saveSeenWords(seenMap);
+    }
+
+    /* =============================================================
+       7. RENDERIZAR LA PREGUNTA ACTIVA
+       ============================================================= */
+    function renderQuestion() {
+      const q = currentQuestions[currentQuestionIndex];
+      isAnswering = true;
+
+      // Ocultar caja de retroalimentación
+      document.getElementById('feedback-box').classList.add('hidden');
+
+      // Actualizar progreso
+      const progressPercent = (currentQuestionIndex / currentQuestions.length) * 100;
+      document.getElementById('game-progress-bar').style.width = `${progressPercent}%`;
+      document.getElementById('game-progress-label').textContent = `Pregunta ${currentQuestionIndex + 1} de ${currentQuestions.length}`;
+
+      // Racha
+      const streakBadge = document.getElementById('streak-badge');
+      if (currentStreak >= 2) {
+        streakBadge.classList.remove('hidden');
+        streakBadge.textContent = `🔥 Racha x${currentStreak}`;
+      } else {
+        streakBadge.classList.add('hidden');
+      }
+
+      // Elementos de la tarjeta
+      document.getElementById('question-word').textContent = q.word;
+      document.getElementById('question-hint').textContent = `"${q.hint}"`;
+
+      // Icono
+      const isH = q.options.includes('H') || q.options.includes('Sin H');
+      document.getElementById('question-icon').textContent = isH ? '👻' : '🦁';
+
+      // Botones de opción
+      const container = document.getElementById('options-container');
+      container.innerHTML = '';
+
+      q.options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = "py-4 px-3 bg-slate-800 hover:bg-slate-700 border-2 border-slate-600 hover:border-amber-400 rounded-2xl font-black text-xl sm:text-2xl text-white transition transform active:scale-95 shadow-md flex items-center justify-center";
+        btn.textContent = opt;
+        btn.onclick = () => handleAnswer(opt, btn);
+        container.appendChild(btn);
+      });
+    }
+
+    /* =============================================================
+       8. EVALUAR RESPUESTA Y EXPLICACIÓN DETALLADA
+       ============================================================= */
+    function handleAnswer(selected, buttonElement) {
+      if (!isAnswering) return;
+      isAnswering = false;
+
+      const q = currentQuestions[currentQuestionIndex];
+      const isCorrect = (selected.trim().toLowerCase() === q.correct.trim().toLowerCase());
+
+      const feedbackBox = document.getElementById('feedback-box');
+      const feedbackAvatar = document.getElementById('feedback-avatar');
+      const feedbackTitle = document.getElementById('feedback-title');
+      const feedbackCheer = document.getElementById('feedback-samantha-cheer');
+      const feedbackExp = document.getElementById('feedback-explanation');
+
+      // Desactivar botones de opciones
+      const allButtons = document.querySelectorAll('#options-container button');
+      allButtons.forEach(btn => {
+        btn.disabled = true;
+        btn.classList.remove('hover:border-amber-400', 'active:scale-95');
+        if (btn.textContent.trim().toLowerCase() === q.correct.trim().toLowerCase()) {
+          btn.classList.add('bg-emerald-600', 'border-emerald-300', 'text-white');
+        } else if (btn === buttonElement && !isCorrect) {
+          btn.classList.add('bg-rose-600', 'border-rose-300', 'text-white');
+        }
+      });
+
+      if (isCorrect) {
+        playAudioTone('correct');
+        score++;
+        currentStreak++;
+        if (currentStreak > maxStreak) maxStreak = currentStreak;
+
+        totalStars += 10;
+        document.getElementById('header-stars').textContent = totalStars;
+
+        feedbackBox.className = "p-4 rounded-2xl border bg-emerald-950/70 border-emerald-500/50 block";
+        feedbackAvatar.textContent = "⭐";
+        feedbackTitle.textContent = "¡CORRECTO, SAMANTA!";
+        feedbackCheer.textContent = "¡Caso resuelto a la perfección! Eres una gran detective.";
+        feedbackExp.textContent = `Regla aplicada: ${q.rule}`;
+
+        currentFeedbackText = `¡Excelente Samantha! Acertaste. ${q.rule}`;
+        speakText(currentFeedbackText);
+      } else {
+        playAudioTone('wrong');
+        currentStreak = 0;
+
+        // Seleccionar frase de aliento personalizada con su nombre
+        const randomCheer = samanthaEncouragements[Math.floor(Math.random() * samanthaEncouragements.length)];
+
+        feedbackBox.className = "p-4 rounded-2xl border bg-rose-950/70 border-rose-500/50 block";
+        feedbackAvatar.textContent = "🔍";
+        feedbackTitle.textContent = "¿Por qué está mal esta respuesta?";
+        feedbackCheer.textContent = randomCheer;
+        feedbackExp.innerHTML = `<strong>Explicación:</strong> ${q.whyWrong}<br><span class="text-amber-300 font-bold block mt-1">La respuesta correcta era: "${q.correct}". Regla: ${q.rule}</span>`;
+
+        currentFeedbackText = `${randomCheer} ${q.whyWrong}`;
+        speakText(currentFeedbackText);
+      }
+    }
+
+    function nextQuestion() {
+      currentQuestionIndex++;
+      if (currentQuestionIndex < currentQuestions.length) {
+        renderQuestion();
+      } else {
+        finishMission();
+      }
+    }
+
+    /* =============================================================
+       9. PANTALLA DE RESULTADOS
+       ============================================================= */
+    function finishMission() {
+      document.getElementById('game-progress-bar').style.width = "100%";
+      showScreen('screen-results');
+
+      const total = currentQuestions.length;
+      const percentage = (score / total) * 100;
+
+      document.getElementById('res-score').textContent = `${score}/${total}`;
+      document.getElementById('res-stars').textContent = `+${score * 10}`;
+      document.getElementById('res-streak').textContent = `${maxStreak}`;
+
+      const resTitle = document.getElementById('results-title');
+      const resSubtitle = document.getElementById('results-subtitle');
+      const resIcon = document.getElementById('results-icon');
+      const badgeName = document.getElementById('badge-name');
+
+      missionsCompletedEver++;
+      if (maxStreak > bestStreakEver) bestStreakEver = maxStreak;
+      saveProgress();
+      document.getElementById('header-stars').textContent = totalStars;
+
+      let resultSummary = "";
+      const isFinalExam = (currentMissionKey === 'all');
+      const passThreshold = isFinalExam ? 80 : 70;
+      const passed = percentage >= passThreshold;
+
+      if (passed) {
+        playAudioTone('fanfare');
+        startConfetti();
+        resIcon.textContent = '🌟';
+        resTitle.textContent = isFinalExam ? "¡Aprobaste el Examen Final, Samantha!" : "¡Misión Cumplida con Honores, Samantha!";
+        resSubtitle.textContent = "¡Impresionante! Has demostrado un dominio genial de las reglas ortográficas.";
+        badgeName.textContent = isFinalExam ? "Gran Maestra de la Ortografía" : "Maestra Detective de la R y la H";
+        resultSummary = `¡Misión cumplida con honores! Acertó ${score} de ${total} palabras (${badgeName.textContent}).`;
+        speakText(`¡Felicidades Samantha! Misión completada con honores. Eres toda una maestra de la ortografía.`);
+      } else {
+        resIcon.textContent = '💪';
+        resTitle.textContent = "¡Buen Esfuerzo, Samantha!";
+        resSubtitle.textContent = isFinalExam
+          ? "Estuviste cerca, pero repasa un poco más antes de intentar de nuevo el examen final."
+          : "Estás muy cerca de dominar todas las reglas. Cada intento te hace más sabia.";
+        badgeName.textContent = "Agente Perseverante de 5.° Grado";
+        resultSummary = `Buen esfuerzo, acertó ${score} de ${total} palabras. Sigue practicando.`;
+        speakText(`¡Bien intentado Samantha! Con un poco más de práctica lograrás la puntuación perfecta. ¡Vamos otra vez!`);
+      }
+
+      // Si aprobó el Examen Final con buen resultado, se le invita a preguntar dudas de cualquier otra materia
+      const doubtPrompt = document.getElementById('doubt-prompt-box');
+      if (isFinalExam && passed) {
+        doubtPrompt.classList.remove('hidden');
+      } else {
+        doubtPrompt.classList.add('hidden');
+      }
+
+      updateWhatsAppLinks(resultSummary, score, total);
+    }
+
+    /* =============================================================
+       9B. COMPARTIR PROGRESO POR WHATSAPP (enlaces wa.me, un toque para enviar)
+       ============================================================= */
+    const whatsappContacts = [
+      { label: "Mamá (Janeth)", phone: "522283668397" },
+      { label: "Madrina Gaby", phone: "525578394965" },
+      { label: "Papá", phone: "522281845114" }
+    ];
+
+    let currentWhatsAppMessage = "";
+
+    function updateWhatsAppLinks(resultSummary, score, total) {
+      const fecha = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long' });
+      currentWhatsAppMessage = `📚 Reporte de Samantha - Agencia Secreta Ortográfica (${fecha}):\n${resultSummary}\n⭐ Estrellas totales acumuladas: ${totalStars}\n🏆 Misiones completadas: ${missionsCompletedEver}`;
+      const encoded = encodeURIComponent(currentWhatsAppMessage);
+
+      document.getElementById('whatsapp-popup-hint').classList.add('hidden');
+
+      const container = document.getElementById('whatsapp-share-container');
+      container.innerHTML = '';
+      whatsappContacts.forEach(contact => {
+        const link = document.createElement('a');
+        link.href = `https://wa.me/${contact.phone}?text=${encoded}`;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.className = "flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] sm:text-xs rounded-xl transition transform active:scale-95 shadow-md flex items-center justify-center gap-1.5 text-center";
+        link.innerHTML = `<span>💬</span> Enviar a ${contact.label}`;
+        container.appendChild(link);
+      });
+    }
+
+    /* Abre las 3 conversaciones de WhatsApp a la vez, cada una con el mensaje ya escrito.
+       El navegador puede bloquear ventanas emergentes; por eso avisamos si detectamos un bloqueo. */
+    function sendWhatsAppToAll() {
+      if (!currentWhatsAppMessage) return;
+      const encoded = encodeURIComponent(currentWhatsAppMessage);
+      let blockedCount = 0;
+
+      whatsappContacts.forEach((contact, i) => {
+        setTimeout(() => {
+          const win = window.open(`https://wa.me/${contact.phone}?text=${encoded}`, '_blank');
+          if (!win) blockedCount++;
+          if (i === whatsappContacts.length - 1 && blockedCount > 0) {
+            document.getElementById('whatsapp-popup-hint').classList.remove('hidden');
+          }
+        }, i * 350);
+      });
+    }
+
+    /* =============================================================
+       9C. TUTORA IA: DUDAS DE CUALQUIER MATERIA (usa la API de Claude)
+       ============================================================= */
+    let avatarTalkInterval = null;
+
+    function setAvatarState(state, customStatusText) {
+      const avatar = document.getElementById('tutor-avatar');
+      const mouth = document.getElementById('avatar-mouth');
+      const status = document.getElementById('tutor-avatar-status');
+      if (!avatar) return;
+
+      avatar.classList.remove('thinking', 'talking');
+      if (avatarTalkInterval) { clearInterval(avatarTalkInterval); avatarTalkInterval = null; }
+
+      if (state === 'thinking') {
+        avatar.classList.add('thinking');
+        mouth.setAttribute('d', 'M48 82 Q60 80 72 82');
+        status.textContent = customStatusText || 'Pensando la mejor explicación...';
+      } else if (state === 'talking') {
+        avatar.classList.add('talking');
+        status.textContent = customStatusText || '¡Aquí tienes tu explicación!';
+        let open = false;
+        avatarTalkInterval = setInterval(() => {
+          open = !open;
+          mouth.setAttribute('d', open ? 'M45 78 Q60 96 75 78' : 'M45 82 Q60 86 75 82');
+        }, 220);
+      } else if (state === 'sad') {
+        mouth.setAttribute('d', 'M45 86 Q60 78 75 86');
+        status.textContent = customStatusText || 'Ups, algo no salió bien.';
+      } else {
+        mouth.setAttribute('d', 'M45 80 Q60 90 75 80');
+        status.textContent = customStatusText || '¡Hola! Pregúntame lo que quieras 🙂';
+      }
+    }
+
+    function openDoubtScreenFromMenu() {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      document.getElementById('doubt-answer-box').classList.add('hidden');
+      document.getElementById('doubt-error-box').classList.add('hidden');
+      document.getElementById('doubt-input').value = '';
+      setAvatarState('idle');
+      showScreen('screen-doubt');
+      speakText('Escribe tu duda de cualquier materia y con gusto te ayudo a entenderla.');
+    }
+
+    async function askTutorDoubt() {
+      const input = document.getElementById('doubt-input');
+      const question = input.value.trim();
+      const askBtn = document.getElementById('doubt-ask-btn');
+      const answerBox = document.getElementById('doubt-answer-box');
+      const answerText = document.getElementById('doubt-answer-text');
+      const errorBox = document.getElementById('doubt-error-box');
+
+      if (!question) return;
+
+      answerBox.classList.add('hidden');
+      errorBox.classList.add('hidden');
+      askBtn.disabled = true;
+      askBtn.innerHTML = '<span>⏳</span> Pensando la mejor explicación...';
+      setAvatarState('thinking');
+
+      try {
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-6",
+            max_tokens: 1000,
+            system: "Eres una tutora escolar paciente, cálida y alentadora para una niña de 10 años que cursa quinto de primaria en México. Ella puede preguntar sobre cualquier materia (matemáticas, ciencias naturales, historia, geografía, etc.), no solo ortografía. Explica el tema de forma muy simple, con un ejemplo concreto y cotidiano, en párrafos cortos, en español de México, con un tono amigable como una agente/detective de una academia secreta. Evita tecnicismos innecesarios. Responde en menos de 180 palabras.",
+            messages: [{ role: "user", content: question }]
+          })
+        });
+
+        if (!response.ok) throw new Error('network');
+        const data = await response.json();
+        const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text);
+        const finalText = textBlocks.join('\n').trim();
+
+        if (!finalText) throw new Error('empty');
+
+        answerText.textContent = finalText;
+        answerBox.classList.remove('hidden');
+        setAvatarState('talking', '¡Aquí tienes tu explicación!');
+        speakText(finalText);
+
+        // Cuando termine de "hablar", el avatar vuelve a su estado normal
+        const estimatedMs = Math.min(Math.max(finalText.length * 45, 2500), 9000);
+        setTimeout(() => setAvatarState('idle', '¿Tienes otra duda?'), estimatedMs);
+      } catch (e) {
+        errorBox.textContent = "No pude conectarme para responder tu duda en este momento. Inténtalo de nuevo en unos segundos, o pídele ayuda a un adulto.";
+        errorBox.classList.remove('hidden');
+        setAvatarState('sad', 'No pude conectarme, inténtalo de nuevo.');
+      } finally {
+        askBtn.disabled = false;
+        askBtn.innerHTML = '<span>💬</span> Preguntar a la Tutora';
+      }
+    }
+
+    /* =============================================================
+       10. CONFETI EN CANVAS (LIVIANO Y SIN DEPENDENCIAS)
+       ============================================================= */
+    function startConfetti() {
+      const canvas = document.getElementById('confetti-canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const particles = [];
+      const colors = ['#fbbf24', '#f472b6', '#a855f7', '#34d399', '#60a5fa'];
+
+      for (let i = 0; i < 70; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height - canvas.height,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          size: Math.random() * 8 + 4,
+          speedY: Math.random() * 3 + 2,
+          speedX: (Math.random() - 0.5) * 2,
+          rotation: Math.random() * 360
+        });
+      }
+
+      let start = Date.now();
+      function loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+          p.y += p.speedY;
+          p.x += p.speedX;
+          p.rotation += 2;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate((p.rotation * Math.PI) / 180);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+          ctx.restore();
+        });
+
+        if (Date.now() - start < 3500) {
+          requestAnimationFrame(loop);
+        } else {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+      loop();
+    }
+
+    window.addEventListener('resize', () => {
+      const canvas = document.getElementById('confetti-canvas');
+      if (canvas) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+    });
+
+    /* Registro del Service Worker para que la app sea instalable y funcione sin conexión */
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {
+          // Si falla (por ejemplo al verse desde este chat sin hosting propio), el juego sigue funcionando igual.
+        });
+      });
+    }
+  </script>
+</body>
+</html>
