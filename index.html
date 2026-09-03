@@ -1491,7 +1491,13 @@
         const estimatedMs = Math.min(Math.max(finalText.length * 45, 2500), 9000);
         setTimeout(() => setAvatarState('idle', '¿Tienes otra duda?'), estimatedMs);
       } catch (e) {
-        errorBox.textContent = "No pude conectarme para responder tu duda en este momento. Inténtalo de nuevo en unos segundos, o pídele ayuda a un adulto.";
+        // 'network' y 'empty' son fallas genéricas sin detalle útil; cualquier otro
+        // mensaje viene de Apps Script/Gemini o de un fallo al leer la respuesta,
+        // y sí ayuda a diagnosticar qué está pasando.
+        const detail = (e && e.message && e.message !== 'network' && e.message !== 'empty') ? e.message : null;
+        errorBox.textContent = detail
+          ? `No pude conectarme para responder tu duda. Detalle técnico: ${detail}`
+          : "No pude conectarme para responder tu duda en este momento. Inténtalo de nuevo en unos segundos, o pídele ayuda a un adulto.";
         errorBox.classList.remove('hidden');
         setAvatarState('sad', 'No pude conectarme, inténtalo de nuevo.');
       } finally {
