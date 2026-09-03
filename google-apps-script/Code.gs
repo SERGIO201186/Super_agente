@@ -88,7 +88,7 @@ function handleAsk_(body) {
 
   var payload = {
     contents: [{ role: 'user', parts: [{ text: question }] }],
-    systemInstruction: { role: 'system', parts: [{ text: TUTOR_SYSTEM_PROMPT }] },
+    systemInstruction: { parts: [{ text: TUTOR_SYSTEM_PROMPT }] },
     generationConfig: {
       maxOutputTokens: 800,
       temperature: 0.7,
@@ -108,6 +108,11 @@ function handleAsk_(body) {
 
   if (status !== 200) {
     var apiMessage = (data.error && data.error.message) || 'Error al llamar a Gemini.';
+    if (data.error && data.error.details) {
+      try {
+        apiMessage += ' | detalles: ' + JSON.stringify(data.error.details);
+      } catch (detailErr) { /* si no se puede serializar, se deja solo el mensaje */ }
+    }
     return jsonResponse_({ error: apiMessage });
   }
 
