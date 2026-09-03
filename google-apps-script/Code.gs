@@ -44,7 +44,12 @@ var TUTOR_SYSTEM_PROMPT =
   'ortografía. Explica el tema de forma muy simple, con un ejemplo concreto y ' +
   'cotidiano, en párrafos cortos, en español de México, con un tono amigable como ' +
   'una agente/detective de una academia secreta. Evita tecnicismos innecesarios. ' +
-  'Responde en menos de 180 palabras.';
+  'Responde en menos de 180 palabras. Tu respuesta se muestra como texto plano ' +
+  'en una app (no hay renderizado de LaTeX ni de Markdown), así que NUNCA uses ' +
+  'notación matemática tipo LaTeX (nada de $, \\frac, \\times, ^, _, etc.) ni ' +
+  'símbolos de Markdown (nada de **negritas**, # encabezados, etc.). Escribe las ' +
+  'fracciones como texto normal, por ejemplo "1/4" o "un cuarto", las operaciones ' +
+  'como "3 + 2 = 5", y todo en oraciones simples y claras.';
 
 var ACTIVITY_SHEET_ID_PROP = 'ACTIVITY_SHEET_ID';
 var ACTIVITY_SHEET_NAME = 'Actividad';
