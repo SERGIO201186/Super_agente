@@ -197,6 +197,10 @@
         <button onclick="openDoubtScreenFromMenu()" class="mt-1 text-[11px] text-slate-400 hover:text-amber-300 underline underline-offset-2 transition-colors">
           🙋 ¿Tienes una duda de otra materia? Pregúntale a tu tutora
         </button>
+
+        <button onclick="openParentScreen()" class="text-[11px] text-slate-500 hover:text-amber-300 underline underline-offset-2 transition-colors">
+          👨‍👩‍👧 Panel de Padres: ver actividad de Samantha
+        </button>
       </section>
 
       <!-- ================= PANTALLA 2: LECCIÓN DIDÁCTICA (ANTES DE JUGAR) ================= -->
@@ -300,6 +304,70 @@
         </div>
 
         <div id="doubt-error-box" class="hidden bg-rose-950/70 border border-rose-500/40 rounded-2xl p-3 text-xs text-rose-200"></div>
+      </section>
+
+      <!-- ================= PANTALLA 2C: PANEL DE PADRES (REPORTE DE ACTIVIDAD) ================= -->
+      <section id="screen-parent" class="hidden flex flex-col gap-4 text-left">
+        <div class="flex items-center justify-between border-b border-purple-500/30 pb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">👨‍👩‍👧</span>
+            <div>
+              <span class="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Panel de Padres</span>
+              <h2 class="text-base sm:text-lg font-black text-white font-fun">Actividad de Samantha</h2>
+            </div>
+          </div>
+          <button onclick="returnToMenu()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-xl">
+            ✕ Salir
+          </button>
+        </div>
+
+        <p class="text-xs sm:text-sm text-slate-300">
+          Este reporte se sincroniza entre teléfonos: los datos que ves aquí se guardaron
+          desde el teléfono donde Samantha juega.
+        </p>
+
+        <div id="parent-pin-gate" class="flex flex-col gap-2">
+          <p class="text-xs text-slate-400">Ingresa el PIN de padres para ver el reporte:</p>
+          <input id="parent-pin-input" type="password" inputmode="numeric" autocomplete="off" maxlength="8"
+            placeholder="PIN"
+            class="w-full p-3 rounded-2xl bg-slate-950 border-2 border-purple-500/30 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400/60 text-center tracking-[0.3em]" />
+          <button onclick="loadParentReport()" class="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-md transition transform active:scale-95">
+            🔐 Entrar
+          </button>
+        </div>
+
+        <button id="parent-refresh-btn" onclick="loadParentReport()" class="hidden w-full py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-md transition transform active:scale-95 flex items-center justify-center gap-2">
+          <span>🔄</span> Actualizar reporte
+        </button>
+
+        <div id="parent-loading" class="hidden text-center text-xs text-purple-300 py-4">Cargando actividad de hoy...</div>
+        <div id="parent-error" class="hidden bg-rose-950/70 border border-rose-500/40 rounded-2xl p-3 text-xs text-rose-200"></div>
+
+        <div id="parent-content" class="hidden flex flex-col gap-3">
+          <div class="grid grid-cols-3 gap-2 bg-slate-950/80 p-3 rounded-2xl border border-slate-700">
+            <div class="p-1.5 text-center">
+              <span class="text-[10px] text-slate-400 font-bold block">Tiempo hoy</span>
+              <span id="parent-active-time" class="text-lg font-black text-emerald-400">0 min</span>
+            </div>
+            <div class="p-1.5 text-center border-x border-slate-700">
+              <span class="text-[10px] text-slate-400 font-bold block">Conexiones hoy</span>
+              <span id="parent-connections" class="text-lg font-black text-amber-400">0</span>
+            </div>
+            <div class="p-1.5 text-center">
+              <span class="text-[10px] text-slate-400 font-bold block">Estrellas totales</span>
+              <span id="parent-total-stars" class="text-lg font-black text-pink-400">0</span>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Misiones de hoy</div>
+            <div id="parent-missions-list" class="space-y-2">
+              <!-- Se inyecta dinámicamente -->
+            </div>
+          </div>
+
+          <p id="parent-updated-at" class="text-[10px] text-slate-500 text-center"></p>
+        </div>
       </section>
 
 
@@ -470,6 +538,14 @@
 
   <!-- ================= LÓGICA JAVASCRIPT ================= -->
   <script>
+    /* =============================================================
+       0. BACKEND COMPARTIDO (Google Apps Script): tutora IA + reporte
+          de actividad para el Panel de Padres. Pega aquí la URL de tu
+          Apps Script desplegado (termina en /exec).
+          Instrucciones para obtenerla: google-apps-script/Code.gs
+       ============================================================= */
+    const TUTOR_PROXY_URL = 'https://script.google.com/macros/s/AKfycbxlAEeVhqq4WmwZrXqXrl2lqXtZpkFspffwB3eWte-upg0MLWrlbFKgBdMU1XMdb-_z/exec';
+
     /* =============================================================
        1. LECCIONES DIDÁCTICAS (REGLAS Y EJEMPLOS ANTES DE JUGAR)
        ============================================================= */
@@ -983,14 +1059,12 @@
 
     async function loadProgress() {
       try {
-        if (window.storage) {
-          const result = await window.storage.get(PROGRESS_KEY, false);
-          if (result && result.value) {
-            const data = JSON.parse(result.value);
-            totalStars = data.totalStars || 0;
-            missionsCompletedEver = data.missionsCompletedEver || 0;
-            bestStreakEver = data.bestStreakEver || 0;
-          }
+        const raw = localStorage.getItem(PROGRESS_KEY);
+        if (raw) {
+          const data = JSON.parse(raw);
+          totalStars = data.totalStars || 0;
+          missionsCompletedEver = data.missionsCompletedEver || 0;
+          bestStreakEver = data.bestStreakEver || 0;
         }
       } catch (e) {
         // Sin progreso guardado todavía o storage no disponible; se empieza en 0.
@@ -1000,14 +1074,12 @@
 
     async function saveProgress() {
       try {
-        if (window.storage) {
-          await window.storage.set(PROGRESS_KEY, JSON.stringify({
-            totalStars,
-            missionsCompletedEver,
-            bestStreakEver,
-            lastPlayed: new Date().toISOString()
-          }), false);
-        }
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+          totalStars,
+          missionsCompletedEver,
+          bestStreakEver,
+          lastPlayed: new Date().toISOString()
+        }));
       } catch (e) {
         // Si falla el guardado, el juego sigue funcionando normalmente en esta sesión.
       }
@@ -1015,8 +1087,142 @@
 
     loadProgress();
 
+    /* =============================================================
+       4C. TELEMETRÍA DE ACTIVIDAD (tiempo de uso, conexiones, misiones)
+       Se guarda en el caché local (localStorage) del teléfono, y además
+       se envía al mismo backend de Apps Script para que se pueda ver
+       desde otro teléfono en el Panel de Padres. Es "mejor esfuerzo":
+       si no hay internet o el backend no está configurado, el juego
+       sigue funcionando igual, solo no se sincroniza con los padres.
+       ============================================================= */
+    const ACTIVITY_KEY = 'samantha-ortografia-actividad';
+    const ACTIVITY_HISTORY_DAYS = 7;
+    const DEVICE_LABEL = 'Samantha';
+    const missionLabels = { r_rr: 'Misión R y RR', h: 'Misión Letra H', all: 'Examen Final' };
+
+    function todayDateKey() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function loadActivityStore() {
+      try {
+        const raw = localStorage.getItem(ACTIVITY_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (e) { /* sin historial todavía */ }
+      return { days: {} };
+    }
+
+    function saveActivityStore(store) {
+      try {
+        const keys = Object.keys(store.days).sort();
+        while (keys.length > ACTIVITY_HISTORY_DAYS) {
+          delete store.days[keys.shift()];
+        }
+        localStorage.setItem(ACTIVITY_KEY, JSON.stringify(store));
+      } catch (e) { /* si falla, la sesión sigue funcionando igual */ }
+    }
+
+    function getTodayBucket(store) {
+      const key = todayDateKey();
+      if (!store.days[key]) {
+        store.days[key] = { activeMs: 0, connections: 0, missions: [] };
+      }
+      return store.days[key];
+    }
+
+    function formatDuration(ms) {
+      const totalMin = Math.round(ms / 60000);
+      if (totalMin < 60) return `${totalMin} min`;
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      return `${h}h ${m}min`;
+    }
+
+    function sendActivityLog(payload, useBeacon) {
+      if (!TUTOR_PROXY_URL) return;
+      const body = JSON.stringify(Object.assign({ action: 'log', deviceLabel: DEVICE_LABEL }, payload));
+      try {
+        if (useBeacon && navigator.sendBeacon) {
+          navigator.sendBeacon(TUTOR_PROXY_URL, new Blob([body], { type: 'text/plain;charset=utf-8' }));
+        } else {
+          fetch(TUTOR_PROXY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body,
+            keepalive: true
+          }).catch(() => {});
+        }
+      } catch (e) { /* mejor esfuerzo: si falla, no interrumpe el juego */ }
+    }
+
+    function recordConnection() {
+      const store = loadActivityStore();
+      const bucket = getTodayBucket(store);
+      bucket.connections++;
+      saveActivityStore(store);
+      sendActivityLog({ type: 'connect' });
+    }
+
+    let activeTrackingSince = document.hidden ? null : Date.now();
+    let activeTrackingPaused = false; // se pausa mientras se ve el Panel de Padres
+
+    function flushActiveTime(useBeacon) {
+      if (activeTrackingSince === null || activeTrackingPaused) return;
+      const now = Date.now();
+      const elapsedMs = now - activeTrackingSince;
+      activeTrackingSince = now;
+      if (elapsedMs < 1000) return;
+
+      const store = loadActivityStore();
+      const bucket = getTodayBucket(store);
+      bucket.activeMs += elapsedMs;
+      saveActivityStore(store);
+      sendActivityLog({ type: 'duration', durationSec: Math.round(elapsedMs / 1000) }, useBeacon);
+    }
+
+    function pauseActivityTracking() {
+      flushActiveTime();
+      activeTrackingPaused = true;
+    }
+
+    function resumeActivityTracking() {
+      if (!activeTrackingPaused) return;
+      activeTrackingPaused = false;
+      activeTrackingSince = Date.now();
+    }
+
+    function recordMissionResult(missionKey, score, total, stars) {
+      const store = loadActivityStore();
+      const bucket = getTodayBucket(store);
+      const now = new Date();
+      const entry = {
+        time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+        missionLabel: missionLabels[missionKey] || missionKey,
+        score, total, stars
+      };
+      bucket.missions.push(entry);
+      saveActivityStore(store);
+      sendActivityLog({ type: 'mission', missionLabel: entry.missionLabel, score, total, stars });
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        flushActiveTime();
+        activeTrackingSince = null;
+      } else if (!activeTrackingPaused) {
+        activeTrackingSince = Date.now();
+      }
+    });
+
+    window.addEventListener('pagehide', () => flushActiveTime(true));
+
+    setInterval(() => flushActiveTime(), 30000);
+
+    recordConnection();
+
     function showScreen(screenId) {
-      ['screen-menu', 'screen-lesson', 'screen-game', 'screen-results', 'screen-doubt'].forEach(id => {
+      ['screen-menu', 'screen-lesson', 'screen-game', 'screen-results', 'screen-doubt', 'screen-parent'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
       });
       document.getElementById(screenId).classList.remove('hidden');
@@ -1024,6 +1230,7 @@
 
     function returnToMenu() {
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      resumeActivityTracking();
       showScreen('screen-menu');
     }
 
@@ -1117,19 +1324,15 @@
 
     async function loadSeenWords() {
       try {
-        if (window.storage) {
-          const result = await window.storage.get(SEEN_WORDS_KEY, false);
-          if (result && result.value) return JSON.parse(result.value);
-        }
+        const raw = localStorage.getItem(SEEN_WORDS_KEY);
+        if (raw) return JSON.parse(raw);
       } catch (e) { /* sin historial todavía */ }
       return {};
     }
 
     async function saveSeenWords(seenMap) {
       try {
-        if (window.storage) {
-          await window.storage.set(SEEN_WORDS_KEY, JSON.stringify(seenMap), false);
-        }
+        localStorage.setItem(SEEN_WORDS_KEY, JSON.stringify(seenMap));
       } catch (e) { /* si falla, el juego sigue funcionando en esta sesión */ }
     }
 
@@ -1308,6 +1511,7 @@
       missionsCompletedEver++;
       if (maxStreak > bestStreakEver) bestStreakEver = maxStreak;
       saveProgress();
+      recordMissionResult(currentMissionKey, score, total, score * 10);
       document.getElementById('header-stars').textContent = totalStars;
 
       let resultSummary = "";
@@ -1358,8 +1562,15 @@
     let currentWhatsAppMessage = "";
 
     function updateWhatsAppLinks(resultSummary, score, total) {
+      flushActiveTime(); // captura el tiempo activo hasta este momento antes de armar el reporte
       const fecha = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long' });
-      currentWhatsAppMessage = `📚 Reporte de Samantha - Agencia Secreta Ortográfica (${fecha}):\n${resultSummary}\n⭐ Estrellas totales acumuladas: ${totalStars}\n🏆 Misiones completadas: ${missionsCompletedEver}`;
+      const store = loadActivityStore();
+      const bucket = getTodayBucket(store);
+      const missionsLines = bucket.missions
+        .map(m => `• ${m.missionLabel} (${m.time}): ${m.score}/${m.total} (+${m.stars}⭐)`)
+        .join('\n');
+
+      currentWhatsAppMessage = `📚 Reporte de Samantha - Agencia Secreta Ortográfica (${fecha}):\n${resultSummary}\n\n📊 Actividad de hoy:\n⏱️ Tiempo activo: ${formatDuration(bucket.activeMs)}\n🔌 Conexiones: ${bucket.connections}\n🎯 Misiones jugadas hoy: ${bucket.missions.length}\n${missionsLines}\n\n⭐ Estrellas totales acumuladas: ${totalStars}\n🏆 Misiones completadas (histórico): ${missionsCompletedEver}`;
       const encoded = encodeURIComponent(currentWhatsAppMessage);
 
       document.getElementById('whatsapp-popup-hint').classList.add('hidden');
@@ -1440,9 +1651,111 @@
       speakText('Escribe tu duda de cualquier materia y con gusto te ayudo a entenderla.');
     }
 
-    // Pega aquí la URL de tu Apps Script desplegado (termina en /exec).
-    // Instrucciones para obtenerla: google-apps-script/Code.gs
-    const TUTOR_PROXY_URL = 'https://script.google.com/macros/s/AKfycbxlAEeVhqq4WmwZrXqXrl2lqXtZpkFspffwB3eWte-upg0MLWrlbFKgBdMU1XMdb-_z/exec';
+    /* =============================================================
+       9C. PANEL DE PADRES: reporte de actividad sincronizado entre
+       teléfonos vía el mismo backend de Apps Script.
+       ============================================================= */
+    let parentPin = ''; // solo en memoria, nunca se guarda en disco
+
+    function openParentScreen() {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      pauseActivityTracking();
+      parentPin = '';
+      document.getElementById('parent-pin-input').value = '';
+      document.getElementById('parent-pin-gate').classList.remove('hidden');
+      document.getElementById('parent-refresh-btn').classList.add('hidden');
+      document.getElementById('parent-content').classList.add('hidden');
+      document.getElementById('parent-error').classList.add('hidden');
+      showScreen('screen-parent');
+    }
+
+    async function loadParentReport() {
+      const loading = document.getElementById('parent-loading');
+      const errorBox = document.getElementById('parent-error');
+      const content = document.getElementById('parent-content');
+      const refreshBtn = document.getElementById('parent-refresh-btn');
+      const pinGate = document.getElementById('parent-pin-gate');
+      const pinInput = document.getElementById('parent-pin-input');
+
+      // Si la puerta de PIN sigue visible, es el primer intento: toma lo que se escribió.
+      // Si ya se pasó (se está solo actualizando), reutiliza el PIN ya validado.
+      const pinToUse = pinGate.classList.contains('hidden') ? parentPin : pinInput.value.trim();
+
+      errorBox.classList.add('hidden');
+
+      if (!pinToUse) {
+        errorBox.textContent = 'Escribe el PIN de padres para continuar.';
+        errorBox.classList.remove('hidden');
+        return;
+      }
+
+      content.classList.add('hidden');
+      loading.classList.remove('hidden');
+      refreshBtn.disabled = true;
+
+      if (!TUTOR_PROXY_URL) {
+        loading.classList.add('hidden');
+        errorBox.textContent = 'El panel todavía no está conectado. Falta configurar TUTOR_PROXY_URL (ver google-apps-script/Code.gs).';
+        errorBox.classList.remove('hidden');
+        refreshBtn.disabled = false;
+        return;
+      }
+
+      try {
+        const response = await fetch(TUTOR_PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'report', pin: pinToUse })
+        });
+        if (!response.ok) throw new Error('network');
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+
+        // PIN correcto: se recuerda solo en memoria (no en disco) para poder
+        // actualizar el reporte sin tener que volver a escribirlo.
+        parentPin = pinToUse;
+        pinGate.classList.add('hidden');
+        refreshBtn.classList.remove('hidden');
+
+        const today = data.today || { activeSeconds: 0, connections: 0, missions: [] };
+        const allTime = data.allTime || { totalStars: 0, totalMissions: 0 };
+
+        document.getElementById('parent-active-time').textContent = formatDuration((today.activeSeconds || 0) * 1000);
+        document.getElementById('parent-connections').textContent = today.connections || 0;
+        document.getElementById('parent-total-stars').textContent = allTime.totalStars || 0;
+
+        const list = document.getElementById('parent-missions-list');
+        list.innerHTML = '';
+        const missions = today.missions || [];
+        if (missions.length === 0) {
+          list.innerHTML = '<p class="text-xs text-slate-400 italic">Todavía no ha jugado ninguna misión hoy.</p>';
+        } else {
+          missions.forEach(m => {
+            const row = document.createElement('div');
+            row.className = 'bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 flex items-center justify-between text-xs';
+            row.innerHTML = `
+              <div>
+                <span class="font-bold text-white">${m.missionLabel}</span>
+                <span class="text-slate-400 block text-[10px]">${m.time} hrs</span>
+              </div>
+              <div class="text-right">
+                <span class="font-black text-emerald-400">${m.score}/${m.total}</span>
+                <span class="text-amber-300 block text-[10px]">+${m.stars} ⭐</span>
+              </div>`;
+            list.appendChild(row);
+          });
+        }
+
+        document.getElementById('parent-updated-at').textContent = `Actualizado: ${new Date().toLocaleTimeString('es-MX')}`;
+        content.classList.remove('hidden');
+      } catch (e) {
+        errorBox.textContent = `No se pudo cargar el reporte. Detalle: ${e.message}`;
+        errorBox.classList.remove('hidden');
+      } finally {
+        loading.classList.add('hidden');
+        refreshBtn.disabled = false;
+      }
+    }
 
     async function askTutorDoubt() {
       const input = document.getElementById('doubt-input');
