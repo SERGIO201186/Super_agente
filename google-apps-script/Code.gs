@@ -54,7 +54,11 @@ function doPost(e) {
     var payload = {
       contents: [{ role: 'user', parts: [{ text: question }] }],
       systemInstruction: { role: 'system', parts: [{ text: TUTOR_SYSTEM_PROMPT }] },
-      generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
+      generationConfig: {
+        maxOutputTokens: 800,
+        temperature: 0.7,
+        thinkingConfig: { thinkingBudget: 0 }
+      }
     };
 
     var response = UrlFetchApp.fetch(url, {
@@ -75,12 +79,14 @@ function doPost(e) {
     var candidate = data.candidates && data.candidates[0];
     var parts = candidate && candidate.content && candidate.content.parts;
     var answer = (parts || [])
+      .filter(function (p) { return !p.thought; })
       .map(function (p) { return p.text || ''; })
       .join('\n')
       .trim();
 
     if (!answer) {
-      return jsonResponse_({ error: 'Gemini no devolvió una respuesta.' });
+      var reason = candidate && candidate.finishReason;
+      return jsonResponse_({ error: 'Gemini no devolvió una respuesta.' + (reason ? ' (finishReason: ' + reason + ')' : '') });
     }
 
     return jsonResponse_({ answer: answer });
