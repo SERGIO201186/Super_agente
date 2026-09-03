@@ -90,9 +90,13 @@ function handleAsk_(body) {
     contents: [{ role: 'user', parts: [{ text: question }] }],
     systemInstruction: { parts: [{ text: TUTOR_SYSTEM_PROMPT }] },
     generationConfig: {
-      maxOutputTokens: 800,
-      temperature: 0.7,
-      thinkingConfig: { thinkingBudget: 0 }
+      // thinkingConfig no es un campo aceptado para este modelo (causaba
+      // "Request contains an invalid argument"). En vez de desactivar el
+      // razonamiento interno, se le da mucho más margen de tokens para
+      // que, aunque "piense" antes de responder, le alcance para llegar
+      // a la respuesta real sin cortarse.
+      maxOutputTokens: 3000,
+      temperature: 0.7
     }
   };
 
