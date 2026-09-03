@@ -247,3 +247,18 @@ function jsonResponse_(obj) {
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+/**
+ * SOLO PARA TI: ejecuta esta función UNA VEZ manualmente desde el editor
+ * (menú desplegable de funciones junto al botón ▶ Ejecutar, arriba) para
+ * autorizar el acceso a Google Sheets ANTES de que el sitio web lo necesite.
+ *
+ * Una petición externa y anónima (la que hace el sitio) nunca puede mostrar
+ * la ventana de permisos de Google; solo tú, ejecutándola aquí dentro del
+ * editor con tu propia cuenta, puedes aceptarla. Después de que esto
+ * termine sin errores, el sitio web ya podrá usar Sheets normalmente.
+ */
+function autorizarPermisos() {
+  var sheet = getActivitySheet_();
+  Logger.log('Autorizado correctamente. Hoja: ' + sheet.getParent().getUrl());
+}
