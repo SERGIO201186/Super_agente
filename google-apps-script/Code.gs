@@ -9,7 +9,9 @@
  * 2. Borra el contenido de Code.gs que trae por defecto y pega este archivo completo.
  * 3. Menú "Configuración del proyecto" (ícono de engranaje) > "Propiedades del script"
  *    > "Añadir propiedad del script": nombre GEMINI_API_KEY, valor = tu clave de Gemini
- *    (consíguela gratis en https://aistudio.google.com/apikey). Guarda.
+ *    (consíguela gratis en https://aistudio.google.com/apikey).
+ *    Agrega otra propiedad: nombre PARENT_PIN, valor = el PIN que quieras usar para
+ *    entrar al Panel de Padres (por ejemplo 2709). Guarda.
  * 4. Botón "Implementar" > "Nueva implementación" > tipo "Aplicación web".
  *    - Ejecutar como: Yo (tu cuenta)
  *    - Quién tiene acceso: Cualquier usuario
@@ -176,6 +178,15 @@ function handleLog_(body) {
 }
 
 function handleReport_(body) {
+  var expectedPin = PropertiesService.getScriptProperties().getProperty('PARENT_PIN');
+  if (!expectedPin) {
+    return jsonResponse_({ error: 'El proxy no tiene configurado PARENT_PIN.' });
+  }
+  var pin = (body.pin || '').toString().trim();
+  if (pin !== expectedPin) {
+    return jsonResponse_({ error: 'PIN incorrecto.' });
+  }
+
   var sheet = getActivitySheet_();
   var values = sheet.getDataRange().getValues();
   var todayStr = Utilities.formatDate(new Date(), ACTIVITY_TIMEZONE, 'yyyy-MM-dd');

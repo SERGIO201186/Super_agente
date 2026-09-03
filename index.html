@@ -326,7 +326,17 @@
           desde el teléfono donde Samantha juega.
         </p>
 
-        <button id="parent-refresh-btn" onclick="loadParentReport()" class="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-md transition transform active:scale-95 flex items-center justify-center gap-2">
+        <div id="parent-pin-gate" class="flex flex-col gap-2">
+          <p class="text-xs text-slate-400">Ingresa el PIN de padres para ver el reporte:</p>
+          <input id="parent-pin-input" type="password" inputmode="numeric" autocomplete="off" maxlength="8"
+            placeholder="PIN"
+            class="w-full p-3 rounded-2xl bg-slate-950 border-2 border-purple-500/30 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400/60 text-center tracking-[0.3em]" />
+          <button onclick="loadParentReport()" class="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-md transition transform active:scale-95">
+            🔐 Entrar
+          </button>
+        </div>
+
+        <button id="parent-refresh-btn" onclick="loadParentReport()" class="hidden w-full py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-md transition transform active:scale-95 flex items-center justify-center gap-2">
           <span>🔄</span> Actualizar reporte
         </button>
 
@@ -1645,13 +1655,18 @@
        9C. PANEL DE PADRES: reporte de actividad sincronizado entre
        teléfonos vía el mismo backend de Apps Script.
        ============================================================= */
+    let parentPin = ''; // solo en memoria, nunca se guarda en disco
+
     function openParentScreen() {
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       pauseActivityTracking();
+      parentPin = '';
+      document.getElementById('parent-pin-input').value = '';
+      document.getElementById('parent-pin-gate').classList.remove('hidden');
+      document.getElementById('parent-refresh-btn').classList.add('hidden');
       document.getElementById('parent-content').classList.add('hidden');
       document.getElementById('parent-error').classList.add('hidden');
       showScreen('screen-parent');
-      loadParentReport();
     }
 
     async function loadParentReport() {
@@ -1659,8 +1674,21 @@
       const errorBox = document.getElementById('parent-error');
       const content = document.getElementById('parent-content');
       const refreshBtn = document.getElementById('parent-refresh-btn');
+      const pinGate = document.getElementById('parent-pin-gate');
+      const pinInput = document.getElementById('parent-pin-input');
+
+      // Si la puerta de PIN sigue visible, es el primer intento: toma lo que se escribió.
+      // Si ya se pasó (se está solo actualizando), reutiliza el PIN ya validado.
+      const pinToUse = pinGate.classList.contains('hidden') ? parentPin : pinInput.value.trim();
 
       errorBox.classList.add('hidden');
+
+      if (!pinToUse) {
+        errorBox.textContent = 'Escribe el PIN de padres para continuar.';
+        errorBox.classList.remove('hidden');
+        return;
+      }
+
       content.classList.add('hidden');
       loading.classList.remove('hidden');
       refreshBtn.disabled = true;
@@ -1677,11 +1705,17 @@
         const response = await fetch(TUTOR_PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'report' })
+          body: JSON.stringify({ action: 'report', pin: pinToUse })
         });
         if (!response.ok) throw new Error('network');
         const data = await response.json();
         if (data.error) throw new Error(data.error);
+
+        // PIN correcto: se recuerda solo en memoria (no en disco) para poder
+        // actualizar el reporte sin tener que volver a escribirlo.
+        parentPin = pinToUse;
+        pinGate.classList.add('hidden');
+        refreshBtn.classList.remove('hidden');
 
         const today = data.today || { activeSeconds: 0, connections: 0, missions: [] };
         const allTime = data.allTime || { totalStars: 0, totalMissions: 0 };
