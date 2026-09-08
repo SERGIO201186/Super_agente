@@ -359,9 +359,39 @@
             </div>
           </div>
 
+          <div class="grid grid-cols-2 gap-2 bg-slate-950/80 p-3 rounded-2xl border border-slate-700">
+            <div class="p-1.5 text-center">
+              <span class="text-[10px] text-slate-400 font-bold block">Aciertos hoy</span>
+              <span id="parent-correct-count" class="text-lg font-black text-emerald-400">0</span>
+            </div>
+            <div class="p-1.5 text-center border-l border-slate-700">
+              <span class="text-[10px] text-slate-400 font-bold block">Errores hoy</span>
+              <span id="parent-incorrect-count" class="text-lg font-black text-rose-400">0</span>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Horarios de conexión hoy</div>
+            <p id="parent-connection-times" class="text-xs text-slate-300">Sin conexiones registradas hoy.</p>
+          </div>
+
           <div>
             <div class="text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Misiones de hoy</div>
             <div id="parent-missions-list" class="space-y-2">
+              <!-- Se inyecta dinámicamente -->
+            </div>
+          </div>
+
+          <div>
+            <div class="text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Palabras que le cuestan más hoy</div>
+            <div id="parent-mistakes-list" class="space-y-2">
+              <!-- Se inyecta dinámicamente -->
+            </div>
+          </div>
+
+          <div>
+            <div class="text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Historial de días anteriores</div>
+            <div id="parent-history-list" class="space-y-2">
               <!-- Se inyecta dinámicamente -->
             </div>
           </div>
@@ -514,15 +544,12 @@
           <div class="text-[11px] font-bold text-slate-400 mb-1.5 text-center uppercase tracking-wider">
             📲 Comparte este avance por WhatsApp
           </div>
-          <button id="whatsapp-send-all-btn" onclick="sendWhatsAppToAll()" class="w-full mb-2 py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl transition transform active:scale-95 shadow-md flex items-center justify-center gap-1.5">
-            <span>📨</span> Enviar a los 3 a la vez
+          <button id="whatsapp-send-all-btn" onclick="sendWhatsAppToAll()" class="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl transition transform active:scale-95 shadow-md flex items-center justify-center gap-1.5">
+            <span>📨</span> Enviar el reporte
           </button>
-          <p id="whatsapp-popup-hint" class="hidden text-[10px] text-amber-300 text-center mb-2">
+          <p id="whatsapp-popup-hint" class="hidden text-[10px] text-amber-300 text-center mt-2">
             Si el navegador bloqueó alguna ventana, permite las "ventanas emergentes" para este sitio y vuelve a intentar.
           </p>
-          <div id="whatsapp-share-container" class="flex flex-col sm:flex-row gap-2">
-            <!-- Botones inyectados dinámicamente -->
-          </div>
         </div>
       </section>
 
@@ -1123,12 +1150,33 @@
       } catch (e) { /* si falla, la sesión sigue funcionando igual */ }
     }
 
+    const MAX_MISTAKES_STORED = 30;
+
     function getTodayBucket(store) {
       const key = todayDateKey();
       if (!store.days[key]) {
-        store.days[key] = { activeMs: 0, connections: 0, missions: [] };
+        store.days[key] = {
+          activeMs: 0,
+          connections: 0,
+          connectionTimes: [],
+          missions: [],
+          correctCount: 0,
+          incorrectCount: 0,
+          mistakes: []
+        };
       }
-      return store.days[key];
+      // Compatibilidad: si el bucket viene de una versión anterior sin estos campos, se completan.
+      const bucket = store.days[key];
+      if (!bucket.connectionTimes) bucket.connectionTimes = [];
+      if (bucket.correctCount === undefined) bucket.correctCount = 0;
+      if (bucket.incorrectCount === undefined) bucket.incorrectCount = 0;
+      if (!bucket.mistakes) bucket.mistakes = [];
+      return bucket;
+    }
+
+    function nowTimeLabel() {
+      const now = new Date();
+      return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     }
 
     function formatDuration(ms) {
@@ -1160,6 +1208,7 @@
       const store = loadActivityStore();
       const bucket = getTodayBucket(store);
       bucket.connections++;
+      bucket.connectionTimes.push(nowTimeLabel());
       saveActivityStore(store);
       sendActivityLog({ type: 'connect' });
     }
@@ -1204,6 +1253,22 @@
       bucket.missions.push(entry);
       saveActivityStore(store);
       sendActivityLog({ type: 'mission', missionLabel: entry.missionLabel, score, total, stars });
+    }
+
+    /* Registra cada respuesta puntual (acierto o error) para poder ver después
+       en el Panel de Padres exactamente en qué palabras/reglas falla Samantha. */
+    function recordAnswerResult(word, rule, selected, correctAnswer, isCorrect) {
+      const store = loadActivityStore();
+      const bucket = getTodayBucket(store);
+      if (isCorrect) {
+        bucket.correctCount++;
+      } else {
+        bucket.incorrectCount++;
+        bucket.mistakes.push({ time: nowTimeLabel(), word, rule, selected, correctAnswer });
+        if (bucket.mistakes.length > MAX_MISTAKES_STORED) bucket.mistakes.shift();
+      }
+      saveActivityStore(store);
+      sendActivityLog({ type: 'answer', word, rule, selected, correctAnswer, correct: isCorrect ? 1 : 0 });
     }
 
     document.addEventListener('visibilitychange', () => {
@@ -1426,6 +1491,7 @@
 
       const q = currentQuestions[currentQuestionIndex];
       const isCorrect = (selected.trim().toLowerCase() === q.correct.trim().toLowerCase());
+      recordAnswerResult(q.word, q.rule, selected, q.correct, isCorrect);
 
       const feedbackBox = document.getElementById('feedback-box');
       const feedbackAvatar = document.getElementById('feedback-avatar');
@@ -1570,22 +1636,9 @@
         .map(m => `• ${m.missionLabel} (${m.time}): ${m.score}/${m.total} (+${m.stars}⭐)`)
         .join('\n');
 
-      currentWhatsAppMessage = `📚 Reporte de Samantha - Agencia Secreta Ortográfica (${fecha}):\n${resultSummary}\n\n📊 Actividad de hoy:\n⏱️ Tiempo activo: ${formatDuration(bucket.activeMs)}\n🔌 Conexiones: ${bucket.connections}\n🎯 Misiones jugadas hoy: ${bucket.missions.length}\n${missionsLines}\n\n⭐ Estrellas totales acumuladas: ${totalStars}\n🏆 Misiones completadas (histórico): ${missionsCompletedEver}`;
-      const encoded = encodeURIComponent(currentWhatsAppMessage);
+      currentWhatsAppMessage = `📚 Reporte de Samantha - Agencia Secreta Ortográfica (${fecha}):\n${resultSummary}\n\n📊 Actividad de hoy:\n⏱️ Tiempo activo: ${formatDuration(bucket.activeMs)}\n🔌 Conexiones: ${bucket.connections}\n🎯 Misiones jugadas hoy: ${bucket.missions.length}\n${missionsLines}\n\n✅ Aciertos hoy: ${bucket.correctCount}\n❌ Errores hoy: ${bucket.incorrectCount}\n\n⭐ Estrellas totales acumuladas: ${totalStars}\n🏆 Misiones completadas (histórico): ${missionsCompletedEver}`;
 
       document.getElementById('whatsapp-popup-hint').classList.add('hidden');
-
-      const container = document.getElementById('whatsapp-share-container');
-      container.innerHTML = '';
-      whatsappContacts.forEach(contact => {
-        const link = document.createElement('a');
-        link.href = `https://wa.me/${contact.phone}?text=${encoded}`;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.className = "flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] sm:text-xs rounded-xl transition transform active:scale-95 shadow-md flex items-center justify-center gap-1.5 text-center";
-        link.innerHTML = `<span>💬</span> Enviar a ${contact.label}`;
-        container.appendChild(link);
-      });
     }
 
     /* Abre las 3 conversaciones de WhatsApp a la vez, cada una con el mensaje ya escrito.
@@ -1717,12 +1770,20 @@
         pinGate.classList.add('hidden');
         refreshBtn.classList.remove('hidden');
 
-        const today = data.today || { activeSeconds: 0, connections: 0, missions: [] };
+        const today = data.today || { activeSeconds: 0, connections: 0, connectionTimes: [], missions: [], correct: 0, incorrect: 0, mistakes: [] };
         const allTime = data.allTime || { totalStars: 0, totalMissions: 0 };
+        const history = data.history || [];
 
         document.getElementById('parent-active-time').textContent = formatDuration((today.activeSeconds || 0) * 1000);
         document.getElementById('parent-connections').textContent = today.connections || 0;
         document.getElementById('parent-total-stars').textContent = allTime.totalStars || 0;
+        document.getElementById('parent-correct-count').textContent = today.correct || 0;
+        document.getElementById('parent-incorrect-count').textContent = today.incorrect || 0;
+
+        const connectionTimes = today.connectionTimes || [];
+        document.getElementById('parent-connection-times').textContent = connectionTimes.length
+          ? connectionTimes.join(', ') + ' hrs'
+          : 'Sin conexiones registradas hoy.';
 
         const list = document.getElementById('parent-missions-list');
         list.innerHTML = '';
@@ -1743,6 +1804,46 @@
                 <span class="text-amber-300 block text-[10px]">+${m.stars} ⭐</span>
               </div>`;
             list.appendChild(row);
+          });
+        }
+
+        const mistakesList = document.getElementById('parent-mistakes-list');
+        mistakesList.innerHTML = '';
+        const mistakes = today.mistakes || [];
+        if (mistakes.length === 0) {
+          mistakesList.innerHTML = '<p class="text-xs text-slate-400 italic">Sin errores registrados hoy. ¡Vamos muy bien!</p>';
+        } else {
+          mistakes.forEach(mk => {
+            const row = document.createElement('div');
+            row.className = 'bg-rose-950/50 border border-rose-500/30 rounded-xl px-3 py-2 text-xs';
+            row.innerHTML = `
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white">❌ "${mk.word}"</span>
+                <span class="text-slate-400 text-[10px]">${mk.time} hrs</span>
+              </div>
+              <div class="text-slate-300 text-[11px] mt-0.5">Escribió "${mk.selected}" en vez de "${mk.correctAnswer}"${mk.rule ? ` · Regla: ${mk.rule}` : ''}</div>`;
+            mistakesList.appendChild(row);
+          });
+        }
+
+        const historyList = document.getElementById('parent-history-list');
+        historyList.innerHTML = '';
+        if (history.length === 0) {
+          historyList.innerHTML = '<p class="text-xs text-slate-400 italic">Todavía no hay historial de días anteriores.</p>';
+        } else {
+          history.forEach(day => {
+            const row = document.createElement('div');
+            row.className = 'bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 flex items-center justify-between text-xs';
+            row.innerHTML = `
+              <div>
+                <span class="font-bold text-white">${day.date}</span>
+                <span class="text-slate-400 block text-[10px]">⏱️ ${formatDuration((day.activeSeconds || 0) * 1000)} · 🔌 ${day.connections || 0} conexiones · 🎯 ${day.missionsCount || 0} actividades</span>
+              </div>
+              <div class="text-right">
+                <span class="font-black text-emerald-400">✅ ${day.correct || 0}</span>
+                <span class="text-rose-300 block text-[10px]">❌ ${day.incorrect || 0}</span>
+              </div>`;
+            historyList.appendChild(row);
           });
         }
 
