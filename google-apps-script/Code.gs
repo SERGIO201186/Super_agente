@@ -54,7 +54,8 @@ var TUTOR_SYSTEM_PROMPT =
 var ACTIVITY_SHEET_ID_PROP = 'ACTIVITY_SHEET_ID';
 var ACTIVITY_SHEET_NAME = 'Actividad';
 var ACTIVITY_TIMEZONE = 'America/Mexico_City';
-var ACTIVITY_EVENT_TYPES = ['connect', 'duration', 'mission'];
+var ACTIVITY_EVENT_TYPES = ['connect', 'duration', 'mission', 'answer'];
+var ACTIVITY_HISTORY_DAYS_BACKEND = 14;
 
 function doPost(e) {
   try {
@@ -166,7 +167,7 @@ function getActivitySheet_() {
   if (!sheet) {
     sheet = ss.getSheets()[0];
     sheet.setName(ACTIVITY_SHEET_NAME);
-    sheet.appendRow(['Timestamp', 'Fecha', 'Tipo', 'Dispositivo', 'Mision', 'Puntaje', 'Total', 'Estrellas', 'DuracionSeg']);
+    sheet.appendRow(['Timestamp', 'Fecha', 'Tipo', 'Dispositivo', 'Mision', 'Puntaje', 'Total', 'Estrellas', 'DuracionSeg', 'Palabra', 'RespuestaCorrecta', 'Seleccionada', 'Acierto', 'Regla']);
   }
   return sheet;
 }
@@ -186,8 +187,13 @@ function handleLog_(body) {
   var total = Number(body.total) || 0;
   var stars = Number(body.stars) || 0;
   var durationSec = Number(body.durationSec) || 0;
+  var word = (body.word || '').toString().slice(0, 60);
+  var correctAnswer = (body.correctAnswer || '').toString().slice(0, 60);
+  var selected = (body.selected || '').toString().slice(0, 60);
+  var correct = type === 'answer' ? (body.correct ? 1 : 0) : '';
+  var rule = (body.rule || '').toString().slice(0, 200);
 
-  sheet.appendRow([now.toISOString(), fecha, type, deviceLabel, missionLabel, score, total, stars, durationSec]);
+  sheet.appendRow([now.toISOString(), fecha, type, deviceLabel, missionLabel, score, total, stars, durationSec, word, correctAnswer, selected, correct, rule]);
   return jsonResponse_({ ok: true });
 }
 
@@ -207,9 +213,25 @@ function handleReport_(body) {
 
   var activeSeconds = 0;
   var connections = 0;
+  var connectionTimes = [];
   var missionsToday = [];
+  var correctToday = 0;
+  var incorrectToday = 0;
+  var mistakesToday = [];
   var totalStarsAllTime = 0;
   var totalMissionsAllTime = 0;
+  var totalCorrectAllTime = 0;
+  var totalIncorrectAllTime = 0;
+
+  // Acumuladores por día para el historial de días anteriores.
+  var byDate = {}; // fecha -> { activeSeconds, connections, missionsCount, correct, incorrect }
+
+  function dayBucket_(fecha) {
+    if (!byDate[fecha]) {
+      byDate[fecha] = { date: fecha, activeSeconds: 0, connections: 0, missionsCount: 0, correct: 0, incorrect: 0 };
+    }
+    return byDate[fecha];
+  }
 
   for (var i = 1; i < values.length; i++) { // fila 0 es el encabezado
     var row = values[i];
@@ -221,14 +243,36 @@ function handleReport_(body) {
     var total = Number(row[6]) || 0;
     var estrellas = Number(row[7]) || 0;
     var duracion = Number(row[8]) || 0;
+    var palabra = row[9];
+    var respuestaCorrecta = row[10];
+    var seleccionada = row[11];
+    var acierto = row[12];
+    var regla = row[13];
 
     if (tipo === 'mission') {
       totalStarsAllTime += estrellas;
       totalMissionsAllTime += 1;
     }
+    if (tipo === 'answer') {
+      if (acierto === 1 || acierto === '1') totalCorrectAllTime += 1;
+      else totalIncorrectAllTime += 1;
+    }
+
+    if (!fecha) continue;
+    var bucket = dayBucket_(fecha);
+    if (tipo === 'connect') bucket.connections += 1;
+    if (tipo === 'duration') bucket.activeSeconds += duracion;
+    if (tipo === 'mission') bucket.missionsCount += 1;
+    if (tipo === 'answer') {
+      if (acierto === 1 || acierto === '1') bucket.correct += 1;
+      else bucket.incorrect += 1;
+    }
 
     if (fecha === todayStr) {
-      if (tipo === 'connect') connections += 1;
+      if (tipo === 'connect') {
+        connections += 1;
+        connectionTimes.push(Utilities.formatDate(new Date(timestamp), ACTIVITY_TIMEZONE, 'HH:mm'));
+      }
       if (tipo === 'duration') activeSeconds += duracion;
       if (tipo === 'mission') {
         missionsToday.push({
@@ -239,19 +283,47 @@ function handleReport_(body) {
           stars: estrellas
         });
       }
+      if (tipo === 'answer') {
+        if (acierto === 1 || acierto === '1') {
+          correctToday += 1;
+        } else {
+          incorrectToday += 1;
+          mistakesToday.push({
+            time: Utilities.formatDate(new Date(timestamp), ACTIVITY_TIMEZONE, 'HH:mm'),
+            word: palabra,
+            correctAnswer: respuestaCorrecta,
+            selected: seleccionada,
+            rule: regla
+          });
+        }
+      }
     }
   }
+
+  var history = Object.keys(byDate)
+    .filter(function (fecha) { return fecha !== todayStr; })
+    .sort()
+    .reverse()
+    .slice(0, ACTIVITY_HISTORY_DAYS_BACKEND)
+    .map(function (fecha) { return byDate[fecha]; });
 
   return jsonResponse_({
     today: {
       date: todayStr,
       activeSeconds: activeSeconds,
       connections: connections,
-      missions: missionsToday
+      connectionTimes: connectionTimes,
+      missions: missionsToday,
+      correct: correctToday,
+      incorrect: incorrectToday,
+      mistakes: mistakesToday
     },
+    history: history,
     allTime: {
       totalStars: totalStarsAllTime,
-      totalMissions: totalMissionsAllTime
+      totalMissions: totalMissionsAllTime,
+      totalCorrect: totalCorrectAllTime,
+      totalIncorrect: totalIncorrectAllTime
     }
   });
 }
