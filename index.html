@@ -517,18 +517,6 @@
           </div>
         </div>
 
-        <!-- Invitación a preguntar dudas de otra materia (solo tras aprobar el Examen Final) -->
-        <div id="doubt-prompt-box" class="hidden w-full max-w-sm p-3 bg-indigo-950/70 border border-indigo-400/40 rounded-2xl flex items-center gap-3 text-left">
-          <span class="text-2xl">🎓</span>
-          <div class="flex-1">
-            <p class="text-xs font-bold text-white">¡Ya dominas esto! ¿Tienes dudas de otra materia?</p>
-            <p class="text-[11px] text-indigo-200">Matemáticas, ciencias, historia... pregunta lo que se te dificulte.</p>
-          </div>
-          <button onclick="openDoubtScreenFromMenu()" class="shrink-0 py-2 px-3 bg-indigo-500 hover:bg-indigo-400 text-white font-black text-[11px] rounded-xl transition active:scale-95">
-            Preguntar
-          </button>
-        </div>
-
         <!-- Botones para volver a jugar o ir a otra lección -->
         <div class="flex flex-col sm:flex-row gap-2 w-full max-w-sm mt-1">
           <button onclick="restartWithNewWords()" class="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 font-black text-xs sm:text-sm rounded-xl transition transform active:scale-95 shadow-md flex items-center justify-center gap-1.5">
@@ -562,6 +550,25 @@
     </footer>
 
   </main>
+
+  <!-- ================= VENTANA EMERGENTE: DUDAS DE OTRA MATERIA ================= -->
+  <div id="doubt-popup" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+    <div class="w-full max-w-sm bg-slate-900 border border-indigo-400/40 rounded-3xl p-5 shadow-2xl text-center flex flex-col items-center gap-3">
+      <span class="text-4xl">🎓</span>
+      <h3 class="font-black text-base text-white">¡Hola, Samantha!</h3>
+      <p id="doubt-popup-text" class="text-xs text-slate-300 leading-relaxed">
+        ¿Tienes alguna duda de otra materia? Matemáticas, ciencias, historia... pregúntale lo que quieras a tu tutora.
+      </p>
+      <div class="flex gap-2 w-full mt-1">
+        <button onclick="closeDoubtPopup()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-black text-xs rounded-xl transition active:scale-95">
+          Ahora no
+        </button>
+        <button onclick="openDoubtFromPopup()" class="flex-1 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs rounded-xl shadow-md transition active:scale-95">
+          Preguntar
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ================= LÓGICA JAVASCRIPT ================= -->
   <script>
@@ -1319,6 +1326,28 @@
 
     recordConnection();
 
+    /* =============================================================
+       4D. VENTANA EMERGENTE: invitación a preguntar dudas de otra materia
+       Aparece al abrir la app y al terminar cada misión, para recordarle
+       a Samantha que también puede preguntarle a su tutora sobre
+       matemáticas, ciencias, historia, etc.
+       ============================================================= */
+    function showDoubtPopup() {
+      document.getElementById('doubt-popup').classList.remove('hidden');
+    }
+
+    function closeDoubtPopup() {
+      document.getElementById('doubt-popup').classList.add('hidden');
+    }
+
+    function openDoubtFromPopup() {
+      closeDoubtPopup();
+      openDoubtScreenFromMenu();
+    }
+
+    // Al abrir la app: se muestra una sola vez, después de que cargue el menú.
+    setTimeout(showDoubtPopup, 1500);
+
     function showScreen(screenId) {
       ['screen-menu', 'screen-lesson', 'screen-game', 'screen-results', 'screen-doubt', 'screen-parent'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
@@ -1849,15 +1878,12 @@
         speakText(`¡Bien intentado Samantha! Con un poco más de práctica lograrás la puntuación perfecta. ¡Vamos otra vez!`);
       }
 
-      // Si aprobó el Examen Final con buen resultado, se le invita a preguntar dudas de cualquier otra materia
-      const doubtPrompt = document.getElementById('doubt-prompt-box');
-      if (isFinalExam && passed) {
-        doubtPrompt.classList.remove('hidden');
-      } else {
-        doubtPrompt.classList.add('hidden');
-      }
-
       updateWhatsAppLinks(resultSummary, score, total);
+
+      // Al terminar cualquier misión, se le invita a preguntar dudas de
+      // otra materia (con un pequeño retraso para que primero vea sus
+      // resultados y escuche la retroalimentación).
+      setTimeout(showDoubtPopup, 1800);
     }
 
     /* =============================================================
