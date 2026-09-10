@@ -390,6 +390,14 @@
           </div>
 
           <div>
+            <div class="text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Dudas de otras materias (en qué apoyarla)</div>
+            <p class="text-[10px] text-slate-500 -mt-1 mb-1.5">Lo que le ha preguntado a su tutora, para reforzarlo en casa o agregarle más actividades.</p>
+            <div id="parent-doubts-list" class="space-y-2">
+              <!-- Se inyecta dinámicamente -->
+            </div>
+          </div>
+
+          <div>
             <div class="text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Historial de días anteriores</div>
             <div id="parent-history-list" class="space-y-2">
               <!-- Se inyecta dinámicamente -->
@@ -1225,6 +1233,14 @@
       const h = Math.floor(totalMin / 60);
       const m = totalMin % 60;
       return `${h}h ${m}min`;
+    }
+
+    /* Escapa texto libre (preguntas de Samantha, respuestas de la tutora IA)
+       antes de insertarlo como HTML en el Panel de Padres. */
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
     }
 
     function sendActivityLog(payload, useBeacon) {
@@ -2096,6 +2112,25 @@
           });
         }
 
+        const doubtsList = document.getElementById('parent-doubts-list');
+        doubtsList.innerHTML = '';
+        const recentDoubts = data.recentDoubts || [];
+        if (recentDoubts.length === 0) {
+          doubtsList.innerHTML = '<p class="text-xs text-slate-400 italic">Todavía no le ha preguntado ninguna duda a su tutora.</p>';
+        } else {
+          recentDoubts.forEach(d => {
+            const row = document.createElement('div');
+            row.className = 'bg-indigo-950/50 border border-indigo-500/30 rounded-xl px-3 py-2 text-xs';
+            row.innerHTML = `
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white">🙋 "${escapeHtml(d.question)}"</span>
+                <span class="text-slate-400 text-[10px] shrink-0 ml-2">${d.date} ${d.time} hrs</span>
+              </div>
+              ${d.answer ? `<div class="text-slate-300 text-[11px] mt-0.5">${escapeHtml(d.answer)}</div>` : ''}`;
+            doubtsList.appendChild(row);
+          });
+        }
+
         const historyList = document.getElementById('parent-history-list');
         historyList.innerHTML = '';
         if (history.length === 0) {
@@ -2170,6 +2205,11 @@
         answerBox.classList.remove('hidden');
         setAvatarState('talking', '¡Aquí tienes tu explicación!');
         speakText(finalText);
+
+        // Se guarda la pregunta y la respuesta en el mismo backend de
+        // actividad, para que el Panel de Padres muestre en qué temas de
+        // otras materias necesita apoyo Samantha.
+        sendActivityLog({ type: 'doubt', word: question, correctAnswer: finalText });
 
         // Cuando termine de "hablar", el avatar vuelve a su estado normal
         const estimatedMs = Math.min(Math.max(finalText.length * 45, 2500), 9000);
