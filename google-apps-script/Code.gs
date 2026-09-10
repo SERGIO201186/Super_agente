@@ -55,7 +55,7 @@ var ACTIVITY_SHEET_ID_PROP = 'ACTIVITY_SHEET_ID';
 var ACTIVITY_SHEET_NAME = 'Actividad';
 var PROGRESS_SHEET_NAME = 'Progreso';
 var ACTIVITY_TIMEZONE = 'America/Mexico_City';
-var ACTIVITY_EVENT_TYPES = ['connect', 'duration', 'mission', 'answer'];
+var ACTIVITY_EVENT_TYPES = ['connect', 'duration', 'mission', 'answer', 'doubt'];
 var ACTIVITY_HISTORY_DAYS_BACKEND = 14;
 
 function doPost(e) {
@@ -233,8 +233,11 @@ function handleLog_(body) {
   var total = Number(body.total) || 0;
   var stars = Number(body.stars) || 0;
   var durationSec = Number(body.durationSec) || 0;
-  var word = (body.word || '').toString().slice(0, 60);
-  var correctAnswer = (body.correctAnswer || '').toString().slice(0, 60);
+  // Para 'doubt' se reutilizan las columnas Palabra/RespuestaCorrecta para
+  // guardar la pregunta que hizo Samantha y la respuesta de la tutora IA,
+  // así que necesitan más espacio que una sola palabra de ortografía.
+  var word = (body.word || '').toString().slice(0, type === 'doubt' ? 300 : 60);
+  var correctAnswer = (body.correctAnswer || '').toString().slice(0, type === 'doubt' ? 1000 : 60);
   var selected = (body.selected || '').toString().slice(0, 60);
   var correct = type === 'answer' ? (body.correct ? 1 : 0) : '';
   var rule = (body.rule || '').toString().slice(0, 200);
@@ -286,6 +289,8 @@ function handleReport_(body) {
   var correctToday = 0;
   var incorrectToday = 0;
   var mistakesToday = [];
+  var doubtsToday = [];
+  var allDoubts = []; // preguntas de otras materias en todo el historial (orden cronológico)
   var totalStarsAllTime = 0;
   var totalMissionsAllTime = 0;
   var totalCorrectAllTime = 0;
@@ -332,6 +337,14 @@ function handleReport_(body) {
       if (acierto === 1 || acierto === '1') totalCorrectAllTime += 1;
       else totalIncorrectAllTime += 1;
     }
+    if (tipo === 'doubt') {
+      allDoubts.push({
+        date: fecha,
+        time: Utilities.formatDate(new Date(timestamp), ACTIVITY_TIMEZONE, 'HH:mm'),
+        question: palabra,
+        answer: respuestaCorrecta
+      });
+    }
 
     if (!fecha) continue;
     var bucket = dayBucket_(fecha);
@@ -372,6 +385,13 @@ function handleReport_(body) {
           });
         }
       }
+      if (tipo === 'doubt') {
+        doubtsToday.push({
+          time: Utilities.formatDate(new Date(timestamp), ACTIVITY_TIMEZONE, 'HH:mm'),
+          question: palabra,
+          answer: respuestaCorrecta
+        });
+      }
     }
   }
 
@@ -391,9 +411,15 @@ function handleReport_(body) {
       missions: missionsToday,
       correct: correctToday,
       incorrect: incorrectToday,
-      mistakes: mistakesToday
+      mistakes: mistakesToday,
+      doubts: doubtsToday
     },
     history: history,
+    // Últimas dudas de otras materias que Samantha le ha preguntado a la
+    // tutora, sin importar el día (no solo hoy), para que los padres vean
+    // en qué temas necesita apoyo y puedan reforzarlos o agregar
+    // actividades relacionadas.
+    recentDoubts: allDoubts.slice(-15).reverse(),
     allTime: {
       totalStars: totalStarsAllTime,
       totalMissions: totalMissionsAllTime,
