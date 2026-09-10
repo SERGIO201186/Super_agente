@@ -169,6 +169,15 @@ function getActivitySheet_() {
     sheet.setName(ACTIVITY_SHEET_NAME);
     sheet.appendRow(['Timestamp', 'Fecha', 'Tipo', 'Dispositivo', 'Mision', 'Puntaje', 'Total', 'Estrellas', 'DuracionSeg', 'Palabra', 'RespuestaCorrecta', 'Seleccionada', 'Acierto', 'Regla']);
   }
+
+  // La columna "Fecha" (B) guarda strings tipo "2026-09-09". Google Sheets
+  // detecta ese patrón y auto-convierte la celda a un valor de fecha real,
+  // lo que rompe las comparaciones de texto en handleReport_ (fecha === hoy
+  // nunca es verdadero, y el orden del historial sale mal porque se agrupa/
+  // ordena por Date.toString() en vez de por la fecha). Forzar formato de
+  // texto plano en la columna evita que esto vuelva a pasar en filas nuevas.
+  sheet.getRange('B:B').setNumberFormat('@');
+
   return sheet;
 }
 
@@ -237,6 +246,13 @@ function handleReport_(body) {
     var row = values[i];
     var timestamp = row[0];
     var fecha = row[1];
+    // Filas antiguas pueden tener la columna Fecha auto-convertida a un
+    // valor Date por Google Sheets (ver comentario en getActivitySheet_).
+    // Se normaliza de vuelta a texto "yyyy-MM-dd" para que las comparaciones
+    // con todayStr y el agrupado/orden del historial funcionen bien.
+    if (fecha instanceof Date) {
+      fecha = Utilities.formatDate(fecha, ACTIVITY_TIMEZONE, 'yyyy-MM-dd');
+    }
     var tipo = row[2];
     var mision = row[4];
     var puntaje = Number(row[5]) || 0;
