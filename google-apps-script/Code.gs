@@ -53,6 +53,7 @@ var TUTOR_SYSTEM_PROMPT =
 
 var ACTIVITY_SHEET_ID_PROP = 'ACTIVITY_SHEET_ID';
 var ACTIVITY_SHEET_NAME = 'Actividad';
+var PROGRESS_SHEET_NAME = 'Progreso';
 var ACTIVITY_TIMEZONE = 'America/Mexico_City';
 var ACTIVITY_EVENT_TYPES = ['connect', 'duration', 'mission', 'answer'];
 var ACTIVITY_HISTORY_DAYS_BACKEND = 14;
@@ -69,6 +70,7 @@ function doPost(e) {
     var action = body.action || 'ask';
     if (action === 'log') return handleLog_(body);
     if (action === 'report') return handleReport_(body);
+    if (action === 'progress') return handleProgress_(body);
     return handleAsk_(body);
   } catch (err) {
     return jsonResponse_({ error: 'Error inesperado en el proxy: ' + err.message });
@@ -181,6 +183,41 @@ function getActivitySheet_() {
   return sheet;
 }
 
+/**
+ * Hoja "Progreso": un resumen de una sola fila (estrellas y misiones
+ * acumuladas de por vida, mejor racha) dentro del mismo libro de cálculo.
+ * Sirve dos propósitos:
+ *  1. Que los papás puedan abrir el libro de Sheets directamente y ver el
+ *     avance de Samantha sin depender de la app ni del PIN del Panel de
+ *     Padres.
+ *  2. Que la app pueda "recuperar" el avance (acción "progress", sin PIN)
+ *     si alguna vez se borra el localStorage del teléfono — así el avance
+ *     nunca se pierde, porque vive también aquí en la nube.
+ * Se mantiene como un contador incremental (no se recalcula escaneando
+ * toda la hoja "Actividad" en cada evento) para que siga siendo rápido
+ * aunque el historial crezca mucho.
+ */
+function getProgressSheet_(ss) {
+  var sheet = ss.getSheetByName(PROGRESS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(PROGRESS_SHEET_NAME);
+    sheet.appendRow(['TotalEstrellas', 'TotalMisiones', 'MejorRacha', 'UltimaActualizacion']);
+    sheet.getRange('A1:D1').setFontWeight('bold');
+    sheet.appendRow([0, 0, 0, '']);
+  }
+  return sheet;
+}
+
+function updateProgressSummary_(ss, starsGained, streakThisMission) {
+  var progressSheet = getProgressSheet_(ss);
+  var range = progressSheet.getRange(2, 1, 1, 4);
+  var row = range.getValues()[0];
+  var totalStars = (Number(row[0]) || 0) + starsGained;
+  var totalMissions = (Number(row[1]) || 0) + 1;
+  var bestStreak = Math.max(Number(row[2]) || 0, streakThisMission);
+  range.setValues([[totalStars, totalMissions, bestStreak, new Date().toISOString()]]);
+}
+
 function handleLog_(body) {
   var type = (body.type || '').toString();
   if (ACTIVITY_EVENT_TYPES.indexOf(type) === -1) {
@@ -203,7 +240,29 @@ function handleLog_(body) {
   var rule = (body.rule || '').toString().slice(0, 200);
 
   sheet.appendRow([now.toISOString(), fecha, type, deviceLabel, missionLabel, score, total, stars, durationSec, word, correctAnswer, selected, correct, rule]);
+
+  if (type === 'mission') {
+    updateProgressSummary_(sheet.getParent(), stars, Number(body.maxStreak) || 0);
+  }
+
   return jsonResponse_({ ok: true });
+}
+
+/**
+ * Devuelve el avance acumulado (estrellas, misiones, mejor racha) sin
+ * requerir el PIN de los padres: lo necesita la propia app de Samantha
+ * para recuperar su avance si el teléfono perdiera el localStorage.
+ * No expone nada sensible (ni respuestas, ni horarios, ni errores).
+ */
+function handleProgress_(body) {
+  var sheet = getActivitySheet_();
+  var progressSheet = getProgressSheet_(sheet.getParent());
+  var row = progressSheet.getRange(2, 1, 1, 4).getValues()[0];
+  return jsonResponse_({
+    totalStars: Number(row[0]) || 0,
+    totalMissions: Number(row[1]) || 0,
+    bestStreak: Number(row[2]) || 0
+  });
 }
 
 function handleReport_(body) {

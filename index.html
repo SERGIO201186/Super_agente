@@ -442,11 +442,11 @@
 
         <!-- Botones de respuesta / Selección -->
         <div>
-          <div class="text-[11px] font-bold text-slate-400 mb-1.5 text-center uppercase tracking-wider">
+          <div id="options-instruction" class="text-[11px] font-bold text-slate-400 mb-1.5 text-center uppercase tracking-wider">
             Samantha, toca la opción correcta:
           </div>
           <div id="options-container" class="grid grid-cols-2 gap-3">
-            <!-- Botones inyectados dinámicamente -->
+            <!-- Botones/controles inyectados dinámicamente según el tipo de actividad -->
           </div>
         </div>
 
@@ -1112,7 +1112,40 @@
       }
     }
 
+    /* El progreso (estrellas, misiones, mejor racha) se guarda normalmente
+       solo en el localStorage del teléfono. Para que Samantha nunca lo
+       pierda (p. ej. si se borra la caché o cambia de teléfono), al abrir
+       la app se compara contra el respaldo guardado en la nube (hoja
+       "Progreso" del libro de Google Sheets) y se conserva siempre el
+       valor más alto de los dos. Es "mejor esfuerzo": si no hay internet
+       o el backend no está configurado, la app sigue funcionando igual
+       con el progreso local. */
+    async function syncProgressFromBackend() {
+      if (!TUTOR_PROXY_URL) return;
+      try {
+        const response = await fetch(TUTOR_PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'progress' })
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.error) return;
+
+        let changed = false;
+        if ((data.totalStars || 0) > totalStars) { totalStars = data.totalStars; changed = true; }
+        if ((data.totalMissions || 0) > missionsCompletedEver) { missionsCompletedEver = data.totalMissions; changed = true; }
+        if ((data.bestStreak || 0) > bestStreakEver) { bestStreakEver = data.bestStreak; changed = true; }
+
+        if (changed) {
+          document.getElementById('header-stars').textContent = totalStars;
+          saveProgress();
+        }
+      } catch (e) { /* sin internet o backend no configurado: se sigue usando el progreso local */ }
+    }
+
     loadProgress();
+    syncProgressFromBackend();
 
     /* =============================================================
        4C. TELEMETRÍA DE ACTIVIDAD (tiempo de uso, conexiones, misiones)
@@ -1241,7 +1274,7 @@
       activeTrackingSince = Date.now();
     }
 
-    function recordMissionResult(missionKey, score, total, stars) {
+    function recordMissionResult(missionKey, score, total, stars, streak) {
       const store = loadActivityStore();
       const bucket = getTodayBucket(store);
       const now = new Date();
@@ -1252,7 +1285,7 @@
       };
       bucket.missions.push(entry);
       saveActivityStore(store);
-      sendActivityLog({ type: 'mission', missionLabel: entry.missionLabel, score, total, stars });
+      sendActivityLog({ type: 'mission', missionLabel: entry.missionLabel, score, total, stars, maxStreak: streak || 0 });
     }
 
     /* Registra cada respuesta puntual (acierto o error) para poder ver después
@@ -1430,6 +1463,7 @@
       pool.sort((a, b) => (seenMap[a.word] || 0) - (seenMap[b.word] || 0));
 
       currentQuestions = pool.slice(0, questionCount);
+      assignActivityKinds(currentQuestions);
 
       // Registrar estas palabras como vistas ahora, para no repetirlas pronto
       const timestamp = Date.now();
@@ -1438,8 +1472,61 @@
     }
 
     /* =============================================================
+       6C. VARIEDAD DE ACTIVIDADES: no siempre el mismo mecanismo
+       Cada palabra puede jugarse de formas distintas (elegir, verdadero/
+       falso, escuchar y reconocer, o escribir la respuesta) para que la
+       misión no se sienta repetitiva aunque cambien solo las palabras.
+       ============================================================= */
+    const ACTIVITY_KINDS = ['choice', 'truefalse', 'listen', 'type'];
+
+    function assignActivityKinds(questions) {
+      // Construye una secuencia barajada por bloques (de 4 en 4) para
+      // garantizar variedad sin que un mismo tipo se repita demasiadas
+      // veces seguidas.
+      const sequence = [];
+      while (sequence.length < questions.length) {
+        const block = [...ACTIVITY_KINDS];
+        for (let i = block.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [block[i], block[j]] = [block[j], block[i]];
+        }
+        sequence.push(...block);
+      }
+
+      questions.forEach((q, i) => {
+        let kind = sequence[i];
+        // "Escribir" solo tiene sentido si la respuesta es corta y sin
+        // espacios (una letra o sigla); si no, se usa opción múltiple.
+        if (kind === 'type' && (q.correct.includes(' ') || q.options.some(o => o.includes(' ')))) {
+          kind = 'choice';
+        }
+        q.kind = kind;
+      });
+    }
+
+    /* Convierte una opción del banco de palabras en el texto que debe
+       insertarse en el hueco de la palabra (p. ej. "Sin H" significa que
+       no se inserta nada). */
+    function optionInsertText(opt) {
+      return opt === 'Sin H' ? '' : opt;
+    }
+
+    /* Arma la palabra completa (sin el marcador de hueco) a partir de una
+       opción elegida, para las actividades de verdadero/falso y escucha. */
+    function buildFullWord(q, optionValue) {
+      return q.word.replace('[ ___ ]', optionInsertText(optionValue)).replace(/\s+/g, '');
+    }
+
+    /* Texto de explicación estándar cuando la respuesta es incorrecta */
+    function defaultWrongExplanation(q, correctDisplay) {
+      return `<strong>Explicación:</strong> ${q.whyWrong}<br><span class="text-amber-300 font-bold block mt-1">La respuesta correcta era: "${correctDisplay}". Regla: ${q.rule}</span>`;
+    }
+
+    /* =============================================================
        7. RENDERIZAR LA PREGUNTA ACTIVA
        ============================================================= */
+    const OPTION_BTN_CLASS = "py-4 px-3 bg-slate-800 hover:bg-slate-700 border-2 border-slate-600 hover:border-amber-400 rounded-2xl font-black text-lg sm:text-2xl text-white transition transform active:scale-95 shadow-md flex items-center justify-center";
+
     function renderQuestion() {
       const q = currentQuestions[currentQuestionIndex];
       isAnswering = true;
@@ -1461,55 +1548,210 @@
         streakBadge.classList.add('hidden');
       }
 
-      // Elementos de la tarjeta
-      document.getElementById('question-word').textContent = q.word;
       document.getElementById('question-hint').textContent = `"${q.hint}"`;
 
-      // Icono
-      const isH = q.options.includes('H') || q.options.includes('Sin H');
-      document.getElementById('question-icon').textContent = isH ? '👻' : '🦁';
-
-      // Botones de opción
+      const promptEl = document.getElementById('question-prompt');
+      const instructionEl = document.getElementById('options-instruction');
+      const wordEl = document.getElementById('question-word');
+      const iconEl = document.getElementById('question-icon');
       const container = document.getElementById('options-container');
       container.innerHTML = '';
 
+      const kind = q.kind || 'choice';
+
+      if (kind === 'truefalse') {
+        renderTrueFalseQuestion(q, { promptEl, instructionEl, wordEl, iconEl, container });
+      } else if (kind === 'listen') {
+        renderListenQuestion(q, { promptEl, instructionEl, wordEl, iconEl, container });
+      } else if (kind === 'type') {
+        renderTypeQuestion(q, { promptEl, instructionEl, wordEl, iconEl, container });
+      } else {
+        renderChoiceQuestion(q, { promptEl, instructionEl, wordEl, iconEl, container });
+      }
+    }
+
+    function renderChoiceQuestion(q, ui) {
+      ui.iconEl.textContent = '🔎';
+      ui.promptEl.textContent = '¿Cómo se escribe correctamente esta palabra?';
+      ui.instructionEl.textContent = 'Samantha, toca la opción correcta:';
+      ui.wordEl.textContent = q.word;
+      ui.container.className = 'grid grid-cols-2 gap-3';
+
       q.options.forEach(opt => {
         const btn = document.createElement('button');
-        btn.className = "py-4 px-3 bg-slate-800 hover:bg-slate-700 border-2 border-slate-600 hover:border-amber-400 rounded-2xl font-black text-xl sm:text-2xl text-white transition transform active:scale-95 shadow-md flex items-center justify-center";
+        btn.className = OPTION_BTN_CLASS;
         btn.textContent = opt;
-        btn.onclick = () => handleAnswer(opt, btn);
-        container.appendChild(btn);
+        btn.onclick = () => {
+          const isCorrect = opt === q.correct;
+          const handled = resolveAnswer(isCorrect, opt, q.correct, buildFullWord(q, opt), defaultWrongExplanation(q, q.correct));
+          if (!handled) return;
+          Array.from(ui.container.children).forEach(b => {
+            b.disabled = true;
+            b.classList.remove('hover:border-amber-400', 'active:scale-95');
+            if (b.textContent.trim() === q.correct) {
+              b.classList.add('bg-emerald-600', 'border-emerald-300', 'text-white');
+            } else if (b === btn && !isCorrect) {
+              b.classList.add('bg-rose-600', 'border-rose-300', 'text-white');
+            }
+          });
+        };
+        ui.container.appendChild(btn);
       });
+    }
+
+    function renderTrueFalseQuestion(q, ui) {
+      ui.iconEl.textContent = '⚖️';
+      ui.promptEl.textContent = '¿Esta palabra está escrita correctamente?';
+      ui.instructionEl.textContent = 'Samantha, decide si está bien o mal escrita:';
+      ui.container.className = 'grid grid-cols-2 gap-3';
+
+      const wrongOption = q.options.find(o => o !== q.correct);
+      const correctFull = buildFullWord(q, q.correct);
+      const wrongFull = buildFullWord(q, wrongOption);
+      const showCorrect = Math.random() < 0.5;
+      const shownWord = showCorrect ? correctFull : wrongFull;
+      ui.wordEl.textContent = shownWord;
+
+      const explanation = showCorrect
+        ? `<strong>Explicación:</strong> Esta palabra SÍ estaba bien escrita: "${shownWord}". ${q.whyWrong}<br><span class="text-amber-300 font-bold block mt-1">Regla: ${q.rule}</span>`
+        : `<strong>Explicación:</strong> Esta palabra tenía un error. ${q.whyWrong}<br><span class="text-amber-300 font-bold block mt-1">La forma correcta es: "${correctFull}" (no "${wrongFull}"). Regla: ${q.rule}</span>`;
+
+      const yesBtn = document.createElement('button');
+      yesBtn.className = OPTION_BTN_CLASS;
+      yesBtn.textContent = '✅ Está bien';
+      const noBtn = document.createElement('button');
+      noBtn.className = OPTION_BTN_CLASS;
+      noBtn.textContent = '❌ Está mal';
+
+      const highlight = (isCorrect, chosenBtn) => {
+        [yesBtn, noBtn].forEach(b => b.classList.remove('hover:border-amber-400', 'active:scale-95'));
+        const correctBtn = showCorrect ? yesBtn : noBtn;
+        correctBtn.classList.add('bg-emerald-600', 'border-emerald-300', 'text-white');
+        if (!isCorrect) chosenBtn.classList.add('bg-rose-600', 'border-rose-300', 'text-white');
+      };
+
+      yesBtn.onclick = () => {
+        const isCorrect = showCorrect === true;
+        const handled = resolveAnswer(isCorrect, '✅ Está bien', showCorrect ? '✅ Está bien' : '❌ Está mal', shownWord, explanation);
+        if (!handled) return;
+        yesBtn.disabled = true; noBtn.disabled = true;
+        highlight(isCorrect, yesBtn);
+      };
+      noBtn.onclick = () => {
+        const isCorrect = showCorrect === false;
+        const handled = resolveAnswer(isCorrect, '❌ Está mal', showCorrect ? '✅ Está bien' : '❌ Está mal', shownWord, explanation);
+        if (!handled) return;
+        yesBtn.disabled = true; noBtn.disabled = true;
+        highlight(isCorrect, noBtn);
+      };
+
+      ui.container.appendChild(yesBtn);
+      ui.container.appendChild(noBtn);
+    }
+
+    function renderListenQuestion(q, ui) {
+      ui.iconEl.textContent = '🎧';
+      ui.promptEl.textContent = 'Escucha con atención y toca la palabra que escuchaste:';
+      ui.instructionEl.textContent = 'Samantha, toca la palabra correcta:';
+      ui.container.className = 'flex flex-col gap-3';
+
+      const correctFull = buildFullWord(q, q.correct);
+      const wrongOption = q.options.find(o => o !== q.correct);
+      const wrongFull = buildFullWord(q, wrongOption);
+      ui.wordEl.textContent = '🔊 ¿Qué palabra es?';
+
+      const replayBtn = document.createElement('button');
+      replayBtn.type = 'button';
+      replayBtn.className = 'py-2.5 bg-slate-800 hover:bg-slate-700 border-2 border-slate-600 rounded-2xl font-bold text-sm text-amber-300 transition active:scale-95';
+      replayBtn.textContent = '🔊 Escuchar de nuevo';
+      replayBtn.onclick = () => speakText(correctFull);
+      ui.container.appendChild(replayBtn);
+
+      const wordOptions = [correctFull, wrongFull];
+      for (let i = wordOptions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [wordOptions[i], wordOptions[j]] = [wordOptions[j], wordOptions[i]];
+      }
+
+      wordOptions.forEach(word => {
+        const btn = document.createElement('button');
+        btn.className = OPTION_BTN_CLASS;
+        btn.textContent = word;
+        btn.onclick = () => {
+          const isCorrect = word === correctFull;
+          const handled = resolveAnswer(isCorrect, word, correctFull, correctFull, defaultWrongExplanation(q, correctFull));
+          if (!handled) return;
+          Array.from(ui.container.querySelectorAll('button')).forEach(b => {
+            if (b === replayBtn) { b.disabled = true; return; }
+            b.disabled = true;
+            b.classList.remove('hover:border-amber-400', 'active:scale-95');
+            if (b.textContent === correctFull) {
+              b.classList.add('bg-emerald-600', 'border-emerald-300', 'text-white');
+            } else if (b === btn && !isCorrect) {
+              b.classList.add('bg-rose-600', 'border-rose-300', 'text-white');
+            }
+          });
+        };
+        ui.container.appendChild(btn);
+      });
+
+      setTimeout(() => speakText(correctFull), 300);
+    }
+
+    function renderTypeQuestion(q, ui) {
+      ui.iconEl.textContent = '✍️';
+      ui.promptEl.textContent = 'Escribe la letra que falta:';
+      ui.instructionEl.textContent = 'Samantha, escribe tu respuesta y verifica:';
+      ui.wordEl.textContent = q.word;
+      ui.container.className = 'flex flex-col gap-3';
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.autocomplete = 'off';
+      input.autocapitalize = 'off';
+      input.spellcheck = false;
+      input.placeholder = 'Escribe aquí...';
+      input.className = 'w-full py-3 px-4 bg-slate-800 border-2 border-slate-600 focus:border-amber-400 rounded-2xl text-white text-lg font-bold text-center outline-none';
+
+      const submitBtn = document.createElement('button');
+      submitBtn.type = 'button';
+      submitBtn.className = 'w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-2xl transition active:scale-95';
+      submitBtn.textContent = 'Verificar ✔️';
+
+      const submit = () => {
+        const typed = input.value.trim();
+        if (!typed) return;
+        const isCorrect = typed.toLowerCase() === q.correct.trim().toLowerCase();
+        const handled = resolveAnswer(isCorrect, typed, q.correct, buildFullWord(q, q.correct), defaultWrongExplanation(q, q.correct));
+        if (!handled) return;
+        input.disabled = true;
+        submitBtn.disabled = true;
+        input.classList.remove('focus:border-amber-400');
+        input.classList.add(isCorrect ? 'border-emerald-400' : 'border-rose-400');
+      };
+      submitBtn.onclick = submit;
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+
+      ui.container.appendChild(input);
+      ui.container.appendChild(submitBtn);
+      setTimeout(() => input.focus(), 50);
     }
 
     /* =============================================================
        8. EVALUAR RESPUESTA Y EXPLICACIÓN DETALLADA
        ============================================================= */
-    function handleAnswer(selected, buttonElement) {
-      if (!isAnswering) return;
+    function resolveAnswer(isCorrect, selectedLabel, correctLabel, recordWord, wrongExplanationHtml) {
+      if (!isAnswering) return false;
       isAnswering = false;
 
       const q = currentQuestions[currentQuestionIndex];
-      const isCorrect = (selected.trim().toLowerCase() === q.correct.trim().toLowerCase());
-      recordAnswerResult(q.word, q.rule, selected, q.correct, isCorrect);
+      recordAnswerResult(recordWord, q.rule, selectedLabel, correctLabel, isCorrect);
 
       const feedbackBox = document.getElementById('feedback-box');
       const feedbackAvatar = document.getElementById('feedback-avatar');
       const feedbackTitle = document.getElementById('feedback-title');
       const feedbackCheer = document.getElementById('feedback-samantha-cheer');
       const feedbackExp = document.getElementById('feedback-explanation');
-
-      // Desactivar botones de opciones
-      const allButtons = document.querySelectorAll('#options-container button');
-      allButtons.forEach(btn => {
-        btn.disabled = true;
-        btn.classList.remove('hover:border-amber-400', 'active:scale-95');
-        if (btn.textContent.trim().toLowerCase() === q.correct.trim().toLowerCase()) {
-          btn.classList.add('bg-emerald-600', 'border-emerald-300', 'text-white');
-        } else if (btn === buttonElement && !isCorrect) {
-          btn.classList.add('bg-rose-600', 'border-rose-300', 'text-white');
-        }
-      });
 
       if (isCorrect) {
         playAudioTone('correct');
@@ -1539,11 +1781,13 @@
         feedbackAvatar.textContent = "🔍";
         feedbackTitle.textContent = "¿Por qué está mal esta respuesta?";
         feedbackCheer.textContent = randomCheer;
-        feedbackExp.innerHTML = `<strong>Explicación:</strong> ${q.whyWrong}<br><span class="text-amber-300 font-bold block mt-1">La respuesta correcta era: "${q.correct}". Regla: ${q.rule}</span>`;
+        feedbackExp.innerHTML = wrongExplanationHtml;
 
         currentFeedbackText = `${randomCheer} ${q.whyWrong}`;
         speakText(currentFeedbackText);
       }
+
+      return true;
     }
 
     function nextQuestion() {
@@ -1577,7 +1821,7 @@
       missionsCompletedEver++;
       if (maxStreak > bestStreakEver) bestStreakEver = maxStreak;
       saveProgress();
-      recordMissionResult(currentMissionKey, score, total, score * 10);
+      recordMissionResult(currentMissionKey, score, total, score * 10, maxStreak);
       document.getElementById('header-stars').textContent = totalStars;
 
       let resultSummary = "";
